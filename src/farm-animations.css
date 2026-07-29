@@ -1,0 +1,12 @@
+.action-feed .work-particle { animation: feed-scatter 0.7s infinite; }
+.action-graze .work-particle { animation: graze-wave 1s infinite; }
+.action-milk .work-particle { animation: milk-pour 0.8s infinite; }
+.action-feed > span { animation: worker-feed 1s ease-in-out infinite; }
+.action-graze > span { animation: worker-guide 1.2s ease-in-out infinite; }
+.action-milk > span { animation: worker-milk 0.8s ease-in-out infinite; }
+@keyframes feed-scatter { 50% { transform: translate(-8px, 10px) rotate(25deg); opacity: 0.55; } }
+@keyframes graze-wave { 50% { transform: translateX(9px) rotate(12deg); } }
+@keyframes milk-pour { 50% { transform: translateY(8px) rotate(-15deg); } }
+@keyframes worker-feed { 50% { transform: rotate(-7deg) translateY(3px); } }
+@keyframes worker-guide { 50% { transform: translateX(5px); } }
+@keyframes worker-milk { 50% { transform: translateY(5px) scale(0.97); } }
