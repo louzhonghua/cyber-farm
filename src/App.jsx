@@ -21,6 +21,43 @@ const cropStageImage = (crop, stage) =>
 const FIELD_ACTIONS = new Set(["sow", "water", "harvest"]);
 const BARN_ACTIONS = new Set(["feed", "graze", "milk"]);
 
+const PLOT_LAYOUT = [
+  { x: 26.3, y: 30.91, w: 11.6, h: 9.35 },
+  { x: 38.42, y: 30.91, w: 10.71, h: 9.46 },
+  { x: 50.38, y: 30.95, w: 10.53, h: 9.35 },
+  { x: 62.45, y: 30.92, w: 10.77, h: 9.46 },
+  { x: 74.64, y: 31.0, w: 11.6, h: 9.46 },
+  { x: 24.09, y: 42.03, w: 12.14, h: 10.73 },
+  { x: 37.12, y: 42.03, w: 12.08, h: 10.63 },
+  { x: 50.17, y: 42.05, w: 11.42, h: 10.73 },
+  { x: 63.34, y: 42.03, w: 12.02, h: 10.95 },
+  { x: 76.6, y: 42.02, w: 12.38, h: 10.84 },
+  { x: 21.56, y: 54.8, w: 13.34, h: 12.65 },
+  { x: 35.78, y: 54.9, w: 12.92, h: 12.86 },
+  { x: 49.84, y: 54.89, w: 12.62, h: 12.75 },
+  { x: 64.14, y: 54.94, w: 13.04, h: 12.75 },
+  { x: 78.85, y: 54.9, w: 13.34, h: 12.75 },
+  { x: 18.52, y: 70.31, w: 14.89, h: 15.3 },
+  { x: 34.0, y: 70.41, w: 14.41, h: 15.52 },
+  { x: 49.52, y: 70.56, w: 13.94, h: 15.62 },
+  { x: 65.22, y: 70.62, w: 14.83, h: 15.73 },
+  { x: 81.49, y: 70.46, w: 15.49, h: 15.62 },
+];
+
+const fieldWorkerPosition = (plotId) => {
+  const plotIndex = Math.max(0, Math.min(PLOT_LAYOUT.length - 1, Number(plotId || 1) - 1));
+  const plot = PLOT_LAYOUT[plotIndex];
+  const column = plotIndex % 5;
+  const row = Math.floor(plotIndex / 5);
+  const side = column >= 3 ? -1 : 1;
+  return {
+    "--worker-x": `${plot.x + side * plot.w * 0.48}%`,
+    "--worker-y": `${plot.y + plot.h * 0.52}%`,
+    "--worker-width": `${6.4 + row * 0.72}%`,
+    zIndex: 12 + row,
+  };
+};
+
 const ANIMAL_IMAGES = {
   奶牛: "/assets/farm/animal-cow-v1.webp",
   绵羊: "/assets/farm/animal-sheep-v1.webp",
@@ -596,10 +633,20 @@ function App() {
             </div>
             <div className="field-scene">
               <div className="plot-grid">
-                {world.plots.map((plot) => {
+                {world.plots.map((plot, plotIndex) => {
                   const isMature = plot.stage >= 4;
+                  const layout = PLOT_LAYOUT[plotIndex];
                   return (
-                    <article key={plot.id} className={`plot ${plot.crop ? `stage-${plot.stage}` : "empty"}`}>
+                    <article
+                      key={plot.id}
+                      className={`plot ${plot.crop ? `stage-${plot.stage}` : "empty"}`}
+                      style={{
+                        "--plot-x": `${layout.x}%`,
+                        "--plot-y": `${layout.y}%`,
+                        "--plot-width": `${layout.w}%`,
+                        "--plot-height": `${layout.h}%`,
+                      }}
+                    >
                     <span className="plot-number">{String(plot.id).padStart(2, "0")}</span>
                     <button
                       type="button"
@@ -644,12 +691,32 @@ function App() {
                 })}
               </div>
               <div className="field-workers">
-                {activeTasks.filter((task) => FIELD_ACTIONS.has(task.type)).map((task, index) => {
+                {activeTasks.filter((task) => FIELD_ACTIONS.has(task.type)).map((task) => {
                   const worker = residents.find((person) => person.id === task.assignee);
-                  return <div key={task.id} className={`working-character action-${task.type}`} style={{ left: `${10 + (index * 23) % 72}%`, top: `${18 + (index % 2) * 45}%` }}>
-                    <div className="work-particle">{taskDefinitions[task.type].icon}</div>
-                    <span>{residentFaces[worker.id] || "🙂"}</span><b>{worker.name}</b><small>{taskDisplayLabel(task)} {task.progress}%</small>
-                  </div>;
+                  return (
+                    <div
+                      key={task.id}
+                      className={`field-worker action-${task.type}`}
+                      style={fieldWorkerPosition(task.targetPlotId)}
+                      aria-label={`${worker.name} ${taskDisplayLabel(task)} ${task.progress}%`}
+                    >
+                      <div className="field-worker-art" aria-hidden="true">
+                        {[0, 1, 2, 3].map((frame) => (
+                          <img
+                            key={frame}
+                            className="field-worker-frame"
+                            src={`/assets/farm/worker-${task.type}-frame-${frame}-v1.webp`}
+                            alt=""
+                            style={{ "--frame-index": frame }}
+                          />
+                        ))}
+                      </div>
+                      <div className="field-worker-status">
+                        <b>{worker.name}</b>
+                        <small>{taskDefinitions[task.type].label} · {task.progress}%</small>
+                      </div>
+                    </div>
+                  );
                 })}
               </div>
             </div>

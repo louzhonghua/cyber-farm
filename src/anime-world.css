@@ -76,16 +76,18 @@
 
 .field-scene .plot-grid {
   position: absolute;
-  inset: 25% 12% 22% 17%;
+  inset: 0;
   z-index: 2;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  grid-template-rows: repeat(3, minmax(0, 1fr)) minmax(0, 1.6fr);
-  gap: 2% 1.5%;
+  display: block;
   margin: 0;
 }
 
 .field-scene .plot {
+  position: absolute;
+  left: var(--plot-x);
+  top: var(--plot-y);
+  width: var(--plot-width);
+  height: var(--plot-height);
   min-height: 0;
   padding: 0;
   overflow: visible;
@@ -95,6 +97,7 @@
   box-shadow: none;
   color: #18382d;
   opacity: 1;
+  transform: translate(-50%, -50%);
 }
 
 .field-scene .plot.empty {
@@ -199,6 +202,69 @@
 
 .field-scene .field-workers {
   z-index: 8;
+  pointer-events: none;
+}
+
+.field-worker {
+  position: absolute;
+  left: var(--worker-x);
+  top: var(--worker-y);
+  width: var(--worker-width);
+  transform: translate(-50%, -92%);
+  transform-origin: 50% 100%;
+}
+
+.field-worker-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 460 / 620;
+  filter: drop-shadow(0 5px 4px rgba(53, 72, 39, 0.28));
+}
+
+.field-worker-frame {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  animation: field-worker-frame-cycle 1.16s step-end infinite;
+  animation-delay: calc(var(--frame-index) * 0.29s);
+}
+
+.field-worker-status {
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  min-width: max-content;
+  padding: 4px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 8px;
+  background: rgba(255, 253, 246, 0.92);
+  color: #315344;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(47, 70, 36, 0.18);
+  transform: translateX(-50%);
+  backdrop-filter: blur(4px);
+}
+
+.field-worker-status b,
+.field-worker-status small {
+  display: block;
+  white-space: nowrap;
+}
+
+.field-worker-status b {
+  font-size: 8px;
+  line-height: 1.1;
+}
+
+.field-worker-status small {
+  margin-top: 2px;
+  color: #6a7d6e;
+  font-size: 6px;
+  line-height: 1.1;
 }
 
 .barn-scene {
@@ -382,6 +448,17 @@
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes field-worker-frame-cycle {
+  0%,
+  24.9% {
+    opacity: 1;
+  }
+  25%,
+  100% {
+    opacity: 0;
   }
 }
 
