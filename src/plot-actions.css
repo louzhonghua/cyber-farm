@@ -1,0 +1,316 @@
+.crop-catalog {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(105px, 1fr));
+  gap: 8px;
+  margin-bottom: 9px;
+  overflow-x: auto;
+}
+
+.crop-catalog > button {
+  display: grid;
+  grid-template-columns: 46px 1fr;
+  align-items: center;
+  min-width: 105px;
+  min-height: 58px;
+  padding: 6px 8px;
+  border: 1px solid #dbe6d8;
+  border-radius: 11px;
+  background: #fffdf6;
+  color: #315344;
+  text-align: left;
+}
+
+.crop-catalog > button:hover,
+.crop-catalog > button.active {
+  border-color: #8ebc5d;
+  background: #eef7df;
+  box-shadow: inset 0 0 0 1px rgba(142, 188, 93, 0.32);
+}
+
+.crop-catalog img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.crop-catalog span,
+.crop-catalog b,
+.crop-catalog small {
+  display: block;
+}
+
+.crop-catalog b {
+  font-size: 10px;
+}
+
+.crop-catalog small {
+  margin-top: 3px;
+  color: #718174;
+  font-size: 8px;
+}
+
+.field-scene .crop-sprite {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  cursor: pointer;
+  caret-color: transparent;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.field-scene .crop-sprite:focus-visible {
+  border-radius: 10px;
+  outline: 3px solid rgba(197, 237, 100, 0.95);
+  outline-offset: 2px;
+}
+
+.field-scene .plot.empty .crop-sprite,
+.field-scene .plot.empty .crop-sprite > span {
+  animation: none;
+}
+
+.field-scene .crop-sprite > span {
+  align-self: center;
+  width: 42px;
+  height: 42px;
+  padding: 4px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: rgba(42, 99, 66, 0.58);
+  box-shadow: 0 4px 12px rgba(42, 75, 42, 0.24);
+  caret-color: transparent;
+}
+
+.field-scene .crop-sprite > span b,
+.field-scene .crop-sprite > span small {
+  display: block;
+  color: white;
+  line-height: 1;
+}
+
+.field-scene .crop-sprite > span b {
+  font-size: 20px;
+}
+
+.field-scene .crop-sprite > span small {
+  margin-top: 2px;
+  font-size: 7px;
+}
+
+.field-scene .plot.stage-4 .plot-caption {
+  border-color: rgba(236, 183, 59, 0.76);
+  background: rgba(255, 247, 203, 0.9);
+}
+
+.plot-action-backdrop {
+  z-index: 120;
+}
+
+.plot-action-panel {
+  position: relative;
+  width: min(540px, 100%);
+  padding: 24px;
+  border: 1px solid #d6e4d2;
+  border-radius: 18px;
+  background: #fffdf6;
+  box-shadow: 0 24px 75px rgba(11, 48, 35, 0.36);
+}
+
+.plot-action-panel > p {
+  margin: 0 0 10px;
+  color: #3f6c58;
+  font: 700 10px "DM Mono", monospace;
+  letter-spacing: 0.14em;
+}
+
+.plot-action-header {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.plot-action-header h2,
+.plot-action-header small {
+  display: block;
+  margin: 0;
+}
+
+.plot-action-header h2 {
+  font-size: 20px;
+}
+
+.plot-action-header small {
+  margin-top: 5px;
+  color: #718174;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.plot-action-preview {
+  width: 82px;
+  height: 82px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #dbe6d8;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #f2f8e9, #e6efd9);
+}
+
+.plot-action-preview img {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 3px rgba(49, 79, 43, 0.18));
+}
+
+.plot-action-preview.empty span {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 2px dashed #8ebc5d;
+  border-radius: 50%;
+  color: #47705a;
+  font-size: 28px;
+  caret-color: transparent;
+}
+
+.plot-crop-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.plot-crop-options > button,
+.plot-action-buttons > button {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  align-items: center;
+  gap: 9px;
+  min-height: 66px;
+  padding: 8px 11px;
+  border: 1px solid #dbe6d8;
+  border-radius: 11px;
+  background: #f5f9ef;
+  color: #2e5543;
+  text-align: left;
+}
+
+.plot-crop-options > button:hover,
+.plot-action-buttons > button:hover {
+  border-color: #8ebc5d;
+  background: #eaf5da;
+}
+
+.plot-crop-options > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.plot-crop-options img {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+}
+
+.plot-crop-options span,
+.plot-crop-options b,
+.plot-crop-options small,
+.plot-action-buttons span,
+.plot-action-buttons b,
+.plot-action-buttons small {
+  display: block;
+}
+
+.plot-crop-options b,
+.plot-action-buttons b {
+  font-size: 11px;
+}
+
+.plot-crop-options small,
+.plot-action-buttons small {
+  margin-top: 3px;
+  color: #718174;
+  font-size: 8px;
+}
+
+.plot-action-buttons {
+  display: grid;
+  gap: 9px;
+}
+
+.plot-action-buttons > button {
+  grid-template-columns: 36px 1fr;
+  width: 100%;
+}
+
+.plot-action-buttons > button > span {
+  font-size: 25px;
+  text-align: center;
+}
+
+.plot-action-buttons > button.harvest {
+  border-color: #d9bc62;
+  background: #fff4c8;
+  color: #5f4816;
+}
+
+.mature-lock-note {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  align-items: start;
+  gap: 9px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #d9bc62;
+  border-radius: 11px;
+  background: #fff9df;
+}
+
+.mature-lock-note > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #d9bc62;
+  color: white;
+  font-weight: 900;
+}
+
+.mature-lock-note b,
+.mature-lock-note small {
+  display: block;
+}
+
+.mature-lock-note b {
+  color: #5f4816;
+  font-size: 11px;
+}
+
+.mature-lock-note small {
+  margin-top: 4px;
+  color: #7c6a3c;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .crop-catalog {
+    grid-template-columns: repeat(5, 118px);
+  }
+
+  .plot-action-panel {
+    padding: 20px 16px;
+  }
+
+  .plot-crop-options {
+    grid-template-columns: 1fr;
+    max-height: 310px;
+    overflow-y: auto;
+  }
+}

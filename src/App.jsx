@@ -5,12 +5,19 @@ import "./farm-game.css";
 import "./farm-animations.css";
 import "./icon-fix.css";
 import "./anime-world.css";
+import "./plot-actions.css";
+import { advancePlotGrowth, canHarvestPlot, canWaterPlot, clampCropStage } from "./farm-rules.js";
 
 const CROP_STAGES = ["破土", "幼苗", "生长期", "半成熟", "成熟"];
-const CROP_STAGE_IMAGES = Array.from(
-  { length: 5 },
-  (_, index) => `/assets/farm/tomato-stage-${index}-v1.webp`,
-);
+const CROP_DEFINITIONS = {
+  番茄: { id: "tomato", icon: "🍅", seed: "番茄种子", unit: "篮" },
+  胡萝卜: { id: "carrot", icon: "🥕", seed: "胡萝卜种子", unit: "篮" },
+  玉米: { id: "corn", icon: "🌽", seed: "玉米种子", unit: "篮" },
+  卷心菜: { id: "cabbage", icon: "🥬", seed: "卷心菜种子", unit: "篮" },
+  小麦: { id: "wheat", icon: "🌾", seed: "小麦种子", unit: "捆" },
+};
+const cropStageImage = (crop, stage) =>
+  `/assets/farm/${CROP_DEFINITIONS[crop]?.id || "tomato"}-stage-${Math.min(4, Math.max(0, stage))}-v1.webp`;
 const FIELD_ACTIONS = new Set(["sow", "water", "harvest"]);
 const BARN_ACTIONS = new Set(["feed", "graze", "milk"]);
 
@@ -41,7 +48,7 @@ const animalVisualState = (animal, index, barnMode) => {
 };
 
 const taskDefinitions = {
-  sow: { label: "播种番茄", role: "farmer", place: "field", icon: "🌰", duration: 100 },
+  sow: { label: "播种作物", role: "farmer", place: "field", icon: "🌰", duration: 100 },
   water: { label: "给作物浇水", role: "farmer", place: "field", icon: "💧", duration: 85 },
   harvest: { label: "收获成熟作物", role: "farmer", place: "field", icon: "🧺", duration: 120 },
   feed: { label: "给牲畜喂食", role: "rancher", place: "barn", icon: "🌾", duration: 90 },
@@ -109,10 +116,26 @@ function ResidentAvatar({ person }) {
 const makePlots = () =>
   Array.from({ length: 20 }, (_, index) => ({
     id: index + 1,
-    crop: index < 8 ? "番茄" : index < 13 ? "番茄" : null,
+    crop: index < 13 ? ["番茄", "胡萝卜", "玉米", "卷心菜", "小麦"][index % 5] : null,
     stage: index < 8 ? 4 : index < 13 ? 2 : 0,
     hydration: index < 8 ? 68 : index < 13 ? 42 : 0,
   }));
+
+const DEFAULT_WAREHOUSE = {
+  番茄: 14,
+  胡萝卜: 0,
+  玉米: 0,
+  卷心菜: 0,
+  小麦: 0,
+  番茄种子: 28,
+  胡萝卜种子: 20,
+  玉米种子: 18,
+  卷心菜种子: 16,
+  小麦种子: 24,
+  饲料: 52,
+  牛奶: 6,
+  鸡蛋: 9,
+};
 
 const defaultWorld = {
   day: 12,
@@ -131,7 +154,7 @@ const defaultWorld = {
     grazing: false,
     milkReady: 2,
   },
-  warehouse: { 番茄: 14, 番茄种子: 28, 饲料: 52, 牛奶: 6, 鸡蛋: 9 },
+  warehouse: DEFAULT_WAREHOUSE,
   tasks: [],
   memories: [
     { person: "林夏", text: "玩家希望成熟作物及时收进中央仓库。", time: "春 12 日" },
@@ -151,16 +174,49 @@ const loadJson = (key, fallback) => {
   }
 };
 
+const normalizeWorldState = (stored) => ({
+  ...defaultWorld,
+  ...stored,
+  plots: makePlots().map((fallbackPlot, index) => {
+    const saved = stored?.plots?.[index];
+    if (!saved) return fallbackPlot;
+    const crop = saved.crop && CROP_DEFINITIONS[saved.crop] ? saved.crop : saved.crop ? "番茄" : null;
+    return {
+      ...fallbackPlot,
+      ...saved,
+      crop,
+      stage: crop ? clampCropStage(saved.stage) : 0,
+      hydration: crop ? Math.min(100, Math.max(0, Number(saved.hydration) || 0)) : 0,
+    };
+  }),
+  warehouse: { ...DEFAULT_WAREHOUSE, ...(stored?.warehouse || {}) },
+  tasks: (stored?.tasks || []).map((task) =>
+    task.type === "sow" && !task.targetPlotId && ["queued", "working"].includes(task.status)
+      ? { ...task, status: "cancelled", progress: 0 }
+      : task,
+  ),
+  barn: { ...defaultWorld.barn, ...(stored?.barn || {}) },
+  stats: { ...defaultWorld.stats, ...(stored?.stats || {}) },
+});
+
 const formatTime = (minutes) =>
   `${String(Math.floor(minutes / 60) % 24).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 
 const roleForTask = (type) => taskDefinitions[type]?.role;
 const placeForTask = (type) => taskDefinitions[type]?.place;
+const taskDisplayLabel = (task) => {
+  if (task.type === "sow") return `在 ${task.targetPlotId || "?"} 号地播种${task.crop || "番茄"}`;
+  if (task.type === "water") return `给 ${task.targetPlotId || "目标"} 号地浇水`;
+  if (task.type === "harvest") return `收割 ${task.targetPlotId || "目标"} 号地`;
+  return taskDefinitions[task.type]?.label || "农场任务";
+};
 
 function App() {
-  const [world, setWorld] = useState(() => loadJson("cyber-farm-world-v2", defaultWorld));
+  const [world, setWorld] = useState(() => normalizeWorldState(loadJson("cyber-farm-world-v2", defaultWorld)));
   const [activeView, setActiveView] = useState("field");
   const [selectedNpc, setSelectedNpc] = useState(null);
+  const [selectedPlotId, setSelectedPlotId] = useState(null);
+  const [catalogCrop, setCatalogCrop] = useState("番茄");
   const [chatHistory, setChatHistory] = useState(() => loadJson("cyber-farm-chat-v2", {}));
   const [message, setMessage] = useState("");
   const [isReplying, setIsReplying] = useState(false);
@@ -192,32 +248,60 @@ function App() {
     const worker = residents.find((person) => person.id === task.assignee);
     let next = { ...draft };
     if (task.type === "sow") {
+      const crop = CROP_DEFINITIONS[task.crop] ? task.crop : "番茄";
+      const seedKey = CROP_DEFINITIONS[crop].seed;
+      const availableSeeds = next.warehouse[seedKey] || 0;
       let planted = 0;
-      const availableSeeds = next.warehouse["番茄种子"] || 0;
       next.plots = next.plots.map((plot) => {
-        if (!plot.crop && planted < Math.min(4, availableSeeds)) {
+        if (plot.id === task.targetPlotId && !plot.crop && availableSeeds > 0) {
           planted += 1;
-          return { ...plot, crop: "番茄", stage: 0, hydration: 30 };
+          return { ...plot, crop, stage: 0, hydration: 30 };
         }
         return plot;
       });
-      next.warehouse = { ...next.warehouse, 番茄种子: availableSeeds - planted };
+      next.warehouse = { ...next.warehouse, [seedKey]: availableSeeds - planted };
       next.stats = { ...next.stats, planted: next.stats.planted + planted };
-      next = addEvent(next, `${worker.name}完成播种，新增 ${planted} 格番茄。`);
+      next = addEvent(
+        next,
+        planted
+          ? `${worker.name}在 ${task.targetPlotId} 号地播种了${crop}。`
+          : `${worker.name}到达 ${task.targetPlotId} 号地时发现无法播种，任务未改变地块。`,
+      );
     }
     if (task.type === "water") {
-      const count = next.plots.filter((plot) => plot.crop).length;
-      next.plots = next.plots.map((plot) => (plot.crop ? { ...plot, hydration: 100 } : plot));
-      next = addEvent(next, `${worker.name}给 ${count} 格作物浇了水。`);
+      let watered = null;
+      next.plots = next.plots.map((plot) => {
+        if (plot.id !== task.targetPlotId || !canWaterPlot(plot)) return plot;
+        watered = plot;
+        return { ...plot, hydration: 100 };
+      });
+      next = addEvent(
+        next,
+        watered
+          ? `${worker.name}给 ${task.targetPlotId} 号地的${watered.crop}浇了水。`
+          : `${task.targetPlotId} 号地无需浇水，成熟作物会保持不变直到收割。`,
+      );
     }
     if (task.type === "harvest") {
-      const harvested = next.plots.filter((plot) => plot.crop && plot.stage >= 4).length;
-      next.plots = next.plots.map((plot) =>
-        plot.crop && plot.stage >= 4 ? { ...plot, crop: null, stage: 0, hydration: 0 } : plot,
+      let harvestedCrop = null;
+      next.plots = next.plots.map((plot) => {
+        if (plot.id !== task.targetPlotId || !canHarvestPlot(plot)) return plot;
+        harvestedCrop = plot.crop;
+        return { ...plot, crop: null, stage: 0, hydration: 0 };
+      });
+      if (harvestedCrop) {
+        next.warehouse = {
+          ...next.warehouse,
+          [harvestedCrop]: (next.warehouse[harvestedCrop] || 0) + 1,
+        };
+        next.stats = { ...next.stats, harvested: next.stats.harvested + 1 };
+      }
+      next = addEvent(
+        next,
+        harvestedCrop
+          ? `${worker.name}收割了 ${task.targetPlotId} 号地的${harvestedCrop}，已实时入库。`
+          : `${task.targetPlotId} 号地尚未成熟，本次没有收割。`,
       );
-      next.warehouse = { ...next.warehouse, 番茄: (next.warehouse.番茄 || 0) + harvested };
-      next.stats = { ...next.stats, harvested: next.stats.harvested + harvested };
-      next = addEvent(next, `${worker.name}收获 ${harvested} 篮番茄，已实时入库。`);
     }
     if (task.type === "feed") {
       const feedUsed = Math.min(next.barn.animals.length, next.warehouse.饲料 || 0);
@@ -279,12 +363,12 @@ function App() {
           next = finishTask(next, task);
         });
         if (next.time % 30 === 0) {
-          next.plots = next.plots.map((plot) => {
-            if (!plot.crop) return plot;
-            const hydration = Math.max(0, plot.hydration - 4);
-            const stage = hydration > 25 && next.time % 120 === 0 ? Math.min(4, plot.stage + 1) : plot.stage;
-            return { ...plot, hydration, stage };
-          });
+          next.plots = next.plots.map((plot) =>
+            advancePlotGrowth(plot, {
+              hydrationLoss: 4,
+              shouldAdvance: next.time % 120 === 0,
+            }),
+          );
           next.barn = {
             ...next.barn,
             animals: next.barn.animals.map((animal) => ({ ...animal, hunger: Math.min(100, animal.hunger + 2) })),
@@ -300,26 +384,45 @@ function App() {
   const queuedTasks = world.tasks.filter((task) => task.status === "queued");
   const activeBarnTask = activeTasks.find((task) => BARN_ACTIONS.has(task.type));
   const barnMode = activeBarnTask?.type || (world.barn.grazing ? "graze" : "idle");
-  const matureCount = world.plots.filter((plot) => plot.crop && plot.stage >= 4).length;
+  const matureCount = world.plots.filter((plot) => canHarvestPlot(plot)).length;
   const plantedCount = world.plots.filter((plot) => plot.crop).length;
   const cropCycleProgress = (world.time % 120) / 120;
+  const selectedPlot = world.plots.find((plot) => plot.id === selectedPlotId) || null;
 
   const workerStatus = (npcId) => {
     const task = activeTasks.find((item) => item.assignee === npcId);
-    return task ? `${taskDefinitions[task.type].label} · ${task.progress}%` : "等待安排";
+    return task ? `${taskDisplayLabel(task)} · ${task.progress}%` : "等待安排";
   };
 
-  const issueTask = (type, preferredNpc) => {
+  const issueTask = (type, preferredNpc, options = {}) => {
     const definition = taskDefinitions[type];
     if (!definition) return;
+    let targetPlotId = options.targetPlotId || null;
+    if (FIELD_ACTIONS.has(type) && !targetPlotId) {
+      if (type === "sow") targetPlotId = world.plots.find((plot) => !plot.crop)?.id || null;
+      if (type === "water") {
+        targetPlotId = [...world.plots]
+          .filter((plot) => canWaterPlot(plot))
+          .sort((a, b) => a.hydration - b.hydration)[0]?.id || null;
+      }
+      if (type === "harvest") targetPlotId = world.plots.find((plot) => canHarvestPlot(plot))?.id || null;
+    }
+    const targetPlot = targetPlotId ? world.plots.find((plot) => plot.id === targetPlotId) : null;
+    const crop = CROP_DEFINITIONS[options.crop] ? options.crop : catalogCrop;
     const candidates = residents.filter((person) => person.role === definition.role);
     const worker =
       candidates.find((person) => person.id === preferredNpc) ||
       candidates.find((person) => !world.tasks.some((task) => task.assignee === person.id && ["queued", "working"].includes(task.status))) ||
       candidates[0];
-    if (type === "sow" && !world.plots.some((plot) => !plot.crop)) return setNotice("土地已种满，没有空地可以播种。");
-    if (type === "sow" && !world.warehouse["番茄种子"]) return setNotice("中央仓库没有番茄种子。");
-    if (type === "harvest" && matureCount === 0) return setNotice("目前没有成熟作物可以收获。");
+    if (type === "sow" && !targetPlot) return setNotice("土地已种满，没有空地可以播种。");
+    if (type === "sow" && targetPlot.crop) return setNotice(`${targetPlot.id} 号地已经种有${targetPlot.crop}。`);
+    if (type === "sow" && !world.warehouse[CROP_DEFINITIONS[crop].seed]) {
+      return setNotice(`中央仓库没有${CROP_DEFINITIONS[crop].seed}。`);
+    }
+    if (type === "water" && !targetPlot) return setNotice("目前没有需要浇水的作物。");
+    if (type === "water" && !canWaterPlot(targetPlot)) return setNotice("成熟作物会保持不变，后续操作只有收割。");
+    if (type === "harvest" && !targetPlot) return setNotice("目前没有成熟作物可以收割。");
+    if (type === "harvest" && !canHarvestPlot(targetPlot)) return setNotice(`${targetPlot.id} 号地尚未成熟。`);
     if (type === "feed" && !world.warehouse.饲料) return setNotice("中央仓库没有饲料。");
     if (type === "milk" && world.barn.milkReady === 0) return setNotice("今天的牛奶已经收集完了。");
     const busy = world.tasks.some((task) => task.assignee === worker.id && ["queued", "working"].includes(task.status));
@@ -330,21 +433,27 @@ function App() {
       status: busy ? "queued" : "working",
       progress: 0,
       createdAt: world.time,
+      targetPlotId: FIELD_ACTIONS.has(type) ? targetPlotId : null,
+      crop: type === "sow" ? crop : targetPlot?.crop || null,
     };
-    setWorld((current) => addEvent({ ...current, tasks: [task, ...current.tasks].slice(0, 40) }, `已安排${worker.name}${definition.label}。`));
+    setWorld((current) => addEvent({ ...current, tasks: [task, ...current.tasks].slice(0, 40) }, `已安排${worker.name}${taskDisplayLabel(task)}。`));
     setActiveView(definition.place);
-    setNotice(`${worker.name}已接受任务，前往${definition.place === "field" ? "田地" : "牧场"}。`);
+    setSelectedPlotId(null);
+    setNotice(`${worker.name}已接受任务，前往${definition.place === "field" ? `${targetPlotId} 号地` : "牧场"}。`);
   };
 
   const detectCommand = (text) => {
-    if (/播种|种地|种番茄|下种/.test(text)) return "sow";
+    if (/播种|种地|下种|种(?:番茄|胡萝卜|玉米|卷心菜|小麦)/.test(text)) return "sow";
     if (/浇水|灌溉/.test(text)) return "water";
-    if (/收获|收菜|摘番茄/.test(text)) return "harvest";
+    if (/收获|收割|收菜|摘番茄/.test(text)) return "harvest";
     if (/喂食|喂动物|饲料/.test(text)) return "feed";
     if (/放牧|遛牛|遛羊/.test(text)) return "graze";
     if (/挤奶|牛奶/.test(text)) return "milk";
     return null;
   };
+
+  const detectCrop = (text) =>
+    Object.keys(CROP_DEFINITIONS).find((crop) => text.includes(crop)) || null;
 
   const sendMessage = async (event) => {
     event.preventDefault();
@@ -375,7 +484,7 @@ function App() {
               plots: world.plots.map((plot) => ({ crop: plot.crop, stage: plot.stage, hydration: plot.hydration })),
               animals: world.barn.animals,
               warehouse: world.warehouse,
-              activeTasks: activeTasks.map((task) => taskDefinitions[task.type].label),
+              activeTasks: activeTasks.map((task) => taskDisplayLabel(task)),
             },
           }),
         });
@@ -393,11 +502,11 @@ function App() {
         reply = `${reply}（模型暂时没有响应，我先按本地指令处理。）`;
       }
     } else if (action) {
-      reply = `明白，我现在去${taskDefinitions[action].label}。你可以在对应区域实时看到进度。`;
+      reply = `明白，我现在去${action === "sow" ? `播种${detectCrop(text) || catalogCrop}` : taskDefinitions[action].label}。你可以在对应区域实时看到进度。`;
     } else {
       reply = `${npc.name}看了看农场：“${npc.traits[0]}的我会记住这件事。”`;
     }
-    if (action) issueTask(action, npc.id);
+    if (action) issueTask(action, npc.id, { crop: detectCrop(text) || undefined });
     setChatHistory((history) => ({
       ...history,
       [selectedNpc]: [...(history[selectedNpc] || []), { role: "npc", text: reply }],
@@ -408,11 +517,9 @@ function App() {
   const advanceThirtyMinutes = () => {
     setWorld((current) => {
       let next = { ...current, time: current.time + 30 };
-      next.plots = next.plots.map((plot) => {
-        if (!plot.crop) return plot;
-        const hydration = Math.max(0, plot.hydration - 6);
-        return { ...plot, hydration, stage: hydration > 25 ? Math.min(4, plot.stage + 1) : plot.stage };
-      });
+      next.plots = next.plots.map((plot) =>
+        advancePlotGrowth(plot, { hydrationLoss: 6, shouldAdvance: true }),
+      );
       return addEvent(next, "时间推进了 30 分钟，作物状态已更新。");
     });
   };
@@ -448,7 +555,7 @@ function App() {
 
         <section className="live-summary">
           <article><span>🌾</span><div><b>{plantedCount}/20</b><small>已种地块</small></div></article>
-          <article><span>🍅</span><div><b>{matureCount}</b><small>成熟待收</small></div></article>
+          <article><span>🧺</span><div><b>{matureCount}</b><small>成熟待收</small></div></article>
           <article><span>🐾</span><div><b>{world.barn.animals.length}</b><small>牧场动物</small></div></article>
           <article><span>📦</span><div><b>{Object.values(world.warehouse).reduce((sum, value) => sum + value, 0)}</b><small>仓库物资</small></div></article>
           <article><span>⚙</span><div><b>{activeTasks.length}</b><small>正在执行</small></div></article>
@@ -456,15 +563,32 @@ function App() {
 
         {activeView === "field" && (
           <section className="world-panel">
-            <div className="panel-title"><div><p>FIELD 01 · 南侧番茄田</p><h2>土地与作物实时状态</h2></div><div className="quick-actions">
-              <button onClick={() => issueTask("sow")}>🌰 播种</button>
+            <div className="panel-title"><div><p>FIELD 01 · 南侧轮作田</p><h2>土地与作物实时状态</h2></div><div className="quick-actions">
+              <button onClick={() => {
+                const emptyPlot = world.plots.find((plot) => !plot.crop);
+                if (emptyPlot) setSelectedPlotId(emptyPlot.id);
+                else setNotice("土地已种满，没有空地可以播种。");
+              }}>🌰 选择作物播种</button>
               <button onClick={() => issueTask("water")}>💧 浇水</button>
-              <button onClick={() => issueTask("harvest")}>🧺 收获</button>
+              <button onClick={() => issueTask("harvest")}>🧺 收割</button>
             </div></div>
-            <div className="growth-journey" aria-label="番茄完整生长过程">
+            <div className="crop-catalog" aria-label="本季可种作物">
+              {Object.entries(CROP_DEFINITIONS).map(([crop, definition]) => (
+                <button
+                  type="button"
+                  key={crop}
+                  className={catalogCrop === crop ? "active" : ""}
+                  onClick={() => setCatalogCrop(crop)}
+                >
+                  <img src={cropStageImage(crop, 4)} alt="" />
+                  <span><b>{crop}</b><small>种子 {world.warehouse[definition.seed] || 0}</small></span>
+                </button>
+              ))}
+            </div>
+            <div className="growth-journey" aria-label={`${catalogCrop}完整生长过程`}>
               {CROP_STAGES.map((stage, index) => (
                 <div className="growth-step" key={stage}>
-                  <div className="growth-step-art"><img src={CROP_STAGE_IMAGES[index]} alt="" /></div>
+                  <div className="growth-step-art"><img src={cropStageImage(catalogCrop, index)} alt="" /></div>
                   <span>{String(index + 1).padStart(2, "0")}</span>
                   <b>{stage}</b>
                 </div>
@@ -477,12 +601,18 @@ function App() {
                   return (
                     <article key={plot.id} className={`plot ${plot.crop ? `stage-${plot.stage}` : "empty"}`}>
                     <span className="plot-number">{String(plot.id).padStart(2, "0")}</span>
-                    <div className="crop-sprite" key={`${plot.id}-${plot.stage}`}>
+                    <button
+                      type="button"
+                      className="crop-sprite"
+                      key={`${plot.id}-${plot.stage}`}
+                      onClick={() => setSelectedPlotId(plot.id)}
+                      aria-label={plot.crop ? `操作 ${plot.id} 号地的${plot.crop}` : `在 ${plot.id} 号空地播种`}
+                    >
                       {plot.crop ? (
                         <>
                           <img
                             className="crop-current-stage"
-                            src={CROP_STAGE_IMAGES[plot.stage]}
+                            src={cropStageImage(plot.crop, plot.stage)}
                             alt={`${plot.crop}：${CROP_STAGES[plot.stage]}`}
                             style={{
                               opacity: isMature ? 1 : 1 - cropCycleProgress * 0.72,
@@ -492,7 +622,7 @@ function App() {
                           {!isMature && (
                             <img
                               className="crop-next-stage"
-                              src={CROP_STAGE_IMAGES[plot.stage + 1]}
+                              src={cropStageImage(plot.crop, plot.stage + 1)}
                               alt=""
                               aria-hidden="true"
                               style={{
@@ -502,8 +632,8 @@ function App() {
                             />
                           )}
                         </>
-                      ) : <span>＋</span>}
-                    </div>
+                      ) : <span><b>＋</b><small>播种</small></span>}
+                    </button>
                     <div className="plot-caption">
                       <strong>{plot.crop || "空地"}</strong>
                       <small>{plot.crop ? `${CROP_STAGES[plot.stage]}${isMature ? "" : ` · ${Math.round(cropCycleProgress * 100)}%`}` : "可播种"}</small>
@@ -518,7 +648,7 @@ function App() {
                   const worker = residents.find((person) => person.id === task.assignee);
                   return <div key={task.id} className={`working-character action-${task.type}`} style={{ left: `${10 + (index * 23) % 72}%`, top: `${18 + (index % 2) * 45}%` }}>
                     <div className="work-particle">{taskDefinitions[task.type].icon}</div>
-                    <span>{residentFaces[worker.id] || "🙂"}</span><b>{worker.name}</b><small>{taskDefinitions[task.type].label} {task.progress}%</small>
+                    <span>{residentFaces[worker.id] || "🙂"}</span><b>{worker.name}</b><small>{taskDisplayLabel(task)} {task.progress}%</small>
                   </div>;
                 })}
               </div>
@@ -569,7 +699,7 @@ function App() {
                 {activeTasks.filter((task) => BARN_ACTIONS.has(task.type)).map((task, index) => {
                   const worker = residents.find((person) => person.id === task.assignee);
                   return <div className={`working-character barn-worker action-${task.type}`} key={task.id} style={{ right: `${8 + index * 20}%`, top: "8%" }}>
-                    <div className="work-particle">{taskDefinitions[task.type].icon}</div><span>{residentFaces[worker.id] || "🙂"}</span><b>{worker.name}</b><small>{taskDefinitions[task.type].label} {task.progress}%</small>
+                    <div className="work-particle">{taskDefinitions[task.type].icon}</div><span>{residentFaces[worker.id] || "🙂"}</span><b>{worker.name}</b><small>{taskDisplayLabel(task)} {task.progress}%</small>
                   </div>;
                 })}
               </div>
@@ -582,9 +712,13 @@ function App() {
           <section className="world-panel warehouse-panel">
             <div className="panel-title"><div><p>WAREHOUSE · 中央仓库</p><h2>收货与库存实时账本</h2></div><span className="live-badge">● LIVE</span></div>
             <div className="warehouse-grid">
-              {Object.entries(world.warehouse).map(([item, count]) => (
-                <article key={item}><span>{{ 番茄: "🍅", 番茄种子: "🌰", 饲料: "🌾", 牛奶: "🥛", 鸡蛋: "🥚" }[item] || "📦"}</span><div><strong>{item}</strong><b>{count}</b><small>{item === "番茄" ? "篮" : item === "牛奶" ? "瓶" : "份"}</small></div></article>
-              ))}
+              {Object.entries(world.warehouse).map(([item, count]) => {
+                const cropDefinition = CROP_DEFINITIONS[item];
+                const seedCrop = Object.entries(CROP_DEFINITIONS).find(([, definition]) => definition.seed === item);
+                const icon = cropDefinition?.icon || (seedCrop ? "🌰" : { 饲料: "🌾", 牛奶: "🥛", 鸡蛋: "🥚" }[item]) || "📦";
+                const unit = cropDefinition?.unit || (item === "牛奶" ? "瓶" : "份");
+                return <article key={item}><span>{icon}</span><div><strong>{item}</strong><b>{count}</b><small>{unit}</small></div></article>;
+              })}
             </div>
             <div className="ledger"><h3>最新收货记录</h3>{world.events.filter((event) => /入库|仓库|收获|牛奶/.test(event.text)).slice(0, 8).map((event) => <p key={event.id}><time>{event.time}</time>{event.text}</p>)}</div>
           </section>
@@ -610,7 +744,7 @@ function App() {
                 {world.tasks.length === 0 && <div className="empty-state">还没有任务，可以从土地、牧场或居民对话中下达指令。</div>}
                 {world.tasks.slice(0, 15).map((task) => {
                   const worker = residents.find((person) => person.id === task.assignee);
-                  return <article key={task.id} className={`operation ${task.status}`}><span>{taskDefinitions[task.type].icon}</span><div><h3>{taskDefinitions[task.type].label}</h3><p>{worker.name} · {task.status === "working" ? "正在执行" : task.status === "queued" ? "等待前序任务" : "已完成"}</p><div className="progress"><i style={{ width: `${task.progress}%` }} /></div></div><b>{task.progress}%</b></article>;
+                  return <article key={task.id} className={`operation ${task.status}`}><span>{taskDefinitions[task.type].icon}</span><div><h3>{taskDisplayLabel(task)}</h3><p>{worker.name} · {task.status === "working" ? "正在执行" : task.status === "queued" ? "等待前序任务" : task.status === "cancelled" ? "旧任务已取消" : "已完成"}</p><div className="progress"><i style={{ width: `${task.progress}%` }} /></div></div><b>{task.progress}%</b></article>;
                 })}
               </div>
               <aside className="event-log"><h3>农场事件</h3>{world.events.slice(0, 12).map((event) => <p key={event.id}><time>{event.time}</time>{event.text}</p>)}</aside>
@@ -621,6 +755,74 @@ function App() {
 
       <button className="ai-settings-button" onClick={() => setAiOpen(true)}>✦ AI 模型设置</button>
       {notice && <div className="game-toast">{notice}</div>}
+
+      {selectedPlot && (
+        <div className="game-modal plot-action-backdrop" onMouseDown={() => setSelectedPlotId(null)}>
+          <section className="plot-action-panel" onMouseDown={(event) => event.stopPropagation()}>
+            <button type="button" className="modal-close" onClick={() => setSelectedPlotId(null)}>×</button>
+            <p>PLOT {String(selectedPlot.id).padStart(2, "0")}</p>
+            <div className="plot-action-header">
+              <div className={`plot-action-preview ${selectedPlot.crop ? "" : "empty"}`}>
+                {selectedPlot.crop
+                  ? <img src={cropStageImage(selectedPlot.crop, selectedPlot.stage)} alt={selectedPlot.crop} />
+                  : <span>＋</span>}
+              </div>
+              <div>
+                <h2>{selectedPlot.crop || "选择要播种的作物"}</h2>
+                <small>
+                  {selectedPlot.crop
+                    ? `${CROP_STAGES[selectedPlot.stage]} · 土壤含水量 ${selectedPlot.hydration}%`
+                    : "选择一种种子，农民会前往这块空地播种。"}
+                </small>
+              </div>
+            </div>
+
+            {!selectedPlot.crop && (
+              <div className="plot-crop-options">
+                {Object.entries(CROP_DEFINITIONS).map(([crop, definition]) => {
+                  const seedCount = world.warehouse[definition.seed] || 0;
+                  return (
+                    <button
+                      type="button"
+                      key={crop}
+                      disabled={seedCount === 0}
+                      onClick={() => {
+                        setCatalogCrop(crop);
+                        issueTask("sow", null, { targetPlotId: selectedPlot.id, crop });
+                      }}
+                    >
+                      <img src={cropStageImage(crop, 4)} alt="" />
+                      <span><b>{crop}</b><small>{definition.seed} · {seedCount}</small></span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {selectedPlot.crop && selectedPlot.stage < 4 && (
+              <div className="plot-action-buttons">
+                <button type="button" onClick={() => issueTask("water", null, { targetPlotId: selectedPlot.id })}>
+                  <span>💧</span><b>安排农民浇水</b><small>只处理 {selectedPlot.id} 号地</small>
+                </button>
+              </div>
+            )}
+
+            {selectedPlot.crop && selectedPlot.stage >= 4 && (
+              <>
+                <div className="mature-lock-note">
+                  <span>✓</span>
+                  <div><b>作物已经成熟并锁定</b><small>不会重新变成幼苗，也不会继续消耗水分；后续操作只有收割。</small></div>
+                </div>
+                <div className="plot-action-buttons">
+                  <button type="button" className="harvest" onClick={() => issueTask("harvest", null, { targetPlotId: selectedPlot.id })}>
+                    <span>🧺</span><b>安排农民收割</b><small>收获将实时进入中央仓库</small>
+                  </button>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      )}
 
       {selectedPerson && (
         <div className="game-modal">
@@ -633,7 +835,7 @@ function App() {
               {isReplying && <div className="chat-bubble npc typing"><i /><i /><i /><span>{selectedPerson.name}正在结合记忆思考…</span></div>}
             </div>
             <form className="chat-input" onSubmit={sendMessage}><input value={message} disabled={isReplying} onChange={(event) => setMessage(event.target.value)} placeholder={isReplying ? "正在生成回复…" : "输入对话或工作指令…"} /><button disabled={isReplying || !message.trim()}>{isReplying ? "生成中" : "发送"}</button></form>
-            <div className="suggestions">{["去给田地浇水", "播种四格番茄", "收获成熟作物", "带动物去放牧"].map((text) => <button key={text} onClick={() => setMessage(text)}>{text}</button>)}</div>
+            <div className="suggestions">{["去给最干的田地浇水", "播种胡萝卜", "收割一块成熟作物", "带动物去放牧"].map((text) => <button key={text} onClick={() => setMessage(text)}>{text}</button>)}</div>
           </div>
         </div>
       )}
