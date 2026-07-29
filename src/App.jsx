@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import './ai.css'
 
 const seed = {
   time: 560,
@@ -33,9 +34,14 @@ const taskConfig = {
 }
 
 const aiProviders = {
-  openai: { label: 'OpenAI', models: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-5-mini'] },
+  openai: { label: 'OpenAI', models: ['gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4.1-mini'] },
+  anthropic: { label: 'Claude', models: ['claude-sonnet-4-5', 'claude-haiku-4-5'] },
+  gemini: { label: 'Google Gemini', models: ['gemini-2.5-pro', 'gemini-2.5-flash'] },
   deepseek: { label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'] },
-  qwen: { label: '通义千问', models: ['qwen-plus', 'qwen-turbo', 'qwen-max'] },
+  qwen: { label: '通义千问', models: ['qwen-max', 'qwen-plus', 'qwen-turbo'] },
+  kimi: { label: 'Kimi', models: ['moonshot-v1-8k', 'moonshot-v1-32k'] },
+  zhipu: { label: '智谱 GLM', models: ['glm-4.7', 'glm-4-plus'] },
+  openrouter: { label: 'OpenRouter', models: ['openai/gpt-5-mini', 'anthropic/claude-sonnet-4-5', 'google/gemini-2.5-flash'] },
 }
 
 const load = () => {
