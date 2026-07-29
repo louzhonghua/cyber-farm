@@ -4,11 +4,41 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "./farm-game.css";
 import "./farm-animations.css";
 import "./icon-fix.css";
+import "./anime-world.css";
 
-const CROP_STAGES = ["种子", "幼苗", "生长", "开花", "成熟"];
-const CROP_ICONS = ["·", "˙", "🌱", "🌿", "🍅"];
+const CROP_STAGES = ["破土", "幼苗", "生长期", "半成熟", "成熟"];
+const CROP_STAGE_IMAGES = Array.from(
+  { length: 5 },
+  (_, index) => `/assets/farm/tomato-stage-${index}-v1.webp`,
+);
 const FIELD_ACTIONS = new Set(["sow", "water", "harvest"]);
 const BARN_ACTIONS = new Set(["feed", "graze", "milk"]);
+
+const ANIMAL_IMAGES = {
+  奶牛: "/assets/farm/animal-cow-v1.webp",
+  绵羊: "/assets/farm/animal-sheep-v1.webp",
+  山羊: "/assets/farm/animal-goat-v1.webp",
+  母鸡: "/assets/farm/animal-chicken-v1.webp",
+};
+
+const BARN_POSITIONS = {
+  idle: [[31, 34], [47, 43], [59, 28], [70, 48], [43, 66], [74, 69]],
+  feed: [[58, 24], [66, 25], [73, 31], [78, 37], [62, 37], [82, 27]],
+  graze: [[27, 43], [48, 28], [68, 43], [36, 67], [60, 65], [79, 58]],
+  milk: [[20, 68], [28, 65], [57, 36], [69, 48], [48, 67], [76, 66]],
+};
+
+const animalVisualState = (animal, index, barnMode) => {
+  const mode = barnMode === "milk" && animal.kind !== "奶牛" ? "idle" : barnMode;
+  const [left, top] = BARN_POSITIONS[mode][index];
+  const labels = {
+    idle: animal.hunger > 65 ? "寻找饲料" : "悠闲休息",
+    feed: "正在进食",
+    graze: "边走边吃草",
+    milk: "正在挤奶",
+  };
+  return { mode, left, top, label: labels[mode] };
+};
 
 const taskDefinitions = {
   sow: { label: "播种番茄", role: "farmer", place: "field", icon: "🌰", duration: 100 },
@@ -167,7 +197,7 @@ function App() {
       next.plots = next.plots.map((plot) => {
         if (!plot.crop && planted < Math.min(4, availableSeeds)) {
           planted += 1;
-          return { ...plot, crop: "番茄", stage: 1, hydration: 30 };
+          return { ...plot, crop: "番茄", stage: 0, hydration: 30 };
         }
         return plot;
       });
@@ -268,8 +298,11 @@ function App() {
 
   const activeTasks = world.tasks.filter((task) => task.status === "working");
   const queuedTasks = world.tasks.filter((task) => task.status === "queued");
+  const activeBarnTask = activeTasks.find((task) => BARN_ACTIONS.has(task.type));
+  const barnMode = activeBarnTask?.type || (world.barn.grazing ? "graze" : "idle");
   const matureCount = world.plots.filter((plot) => plot.crop && plot.stage >= 4).length;
   const plantedCount = world.plots.filter((plot) => plot.crop).length;
+  const cropCycleProgress = (world.time % 120) / 120;
 
   const workerStatus = (npcId) => {
     const task = activeTasks.find((item) => item.assignee === npcId);
@@ -428,17 +461,57 @@ function App() {
               <button onClick={() => issueTask("water")}>💧 浇水</button>
               <button onClick={() => issueTask("harvest")}>🧺 收获</button>
             </div></div>
+            <div className="growth-journey" aria-label="番茄完整生长过程">
+              {CROP_STAGES.map((stage, index) => (
+                <div className="growth-step" key={stage}>
+                  <div className="growth-step-art"><img src={CROP_STAGE_IMAGES[index]} alt="" /></div>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <b>{stage}</b>
+                </div>
+              ))}
+            </div>
             <div className="field-scene">
               <div className="plot-grid">
-                {world.plots.map((plot) => (
-                  <article key={plot.id} className={`plot ${plot.crop ? `stage-${plot.stage}` : "empty"}`}>
+                {world.plots.map((plot) => {
+                  const isMature = plot.stage >= 4;
+                  return (
+                    <article key={plot.id} className={`plot ${plot.crop ? `stage-${plot.stage}` : "empty"}`}>
                     <span className="plot-number">{String(plot.id).padStart(2, "0")}</span>
-                    <div className="crop-sprite">{plot.crop ? CROP_ICONS[plot.stage] : "＋"}</div>
-                    <strong>{plot.crop || "空地"}</strong>
-                    <small>{plot.crop ? CROP_STAGES[plot.stage] : "可播种"}</small>
+                    <div className="crop-sprite" key={`${plot.id}-${plot.stage}`}>
+                      {plot.crop ? (
+                        <>
+                          <img
+                            className="crop-current-stage"
+                            src={CROP_STAGE_IMAGES[plot.stage]}
+                            alt={`${plot.crop}：${CROP_STAGES[plot.stage]}`}
+                            style={{
+                              opacity: isMature ? 1 : 1 - cropCycleProgress * 0.72,
+                              transform: `scale(${1 + cropCycleProgress * 0.04})`,
+                            }}
+                          />
+                          {!isMature && (
+                            <img
+                              className="crop-next-stage"
+                              src={CROP_STAGE_IMAGES[plot.stage + 1]}
+                              alt=""
+                              aria-hidden="true"
+                              style={{
+                                opacity: cropCycleProgress,
+                                transform: `scale(${0.78 + cropCycleProgress * 0.22})`,
+                              }}
+                            />
+                          )}
+                        </>
+                      ) : <span>＋</span>}
+                    </div>
+                    <div className="plot-caption">
+                      <strong>{plot.crop || "空地"}</strong>
+                      <small>{plot.crop ? `${CROP_STAGES[plot.stage]}${isMature ? "" : ` · ${Math.round(cropCycleProgress * 100)}%`}` : "可播种"}</small>
+                    </div>
                     {plot.crop && <div className="water-meter"><i style={{ width: `${plot.hydration}%` }} /></div>}
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
               </div>
               <div className="field-workers">
                 {activeTasks.filter((task) => FIELD_ACTIONS.has(task.type)).map((task, index) => {
@@ -461,14 +534,38 @@ function App() {
               <button onClick={() => issueTask("graze")}>🐾 放牧</button>
               <button onClick={() => issueTask("milk")}>🥛 挤奶</button>
             </div></div>
-            <div className={`barn-scene ${world.barn.grazing ? "grazing" : ""}`}>
-              <div className="barn-building">月光畜舍</div>
+            <div className={`barn-scene mode-${barnMode}`}>
+              <div className="barn-mode-badge"><i />{{
+                idle: "日常活动",
+                feed: "集中进食",
+                graze: "草场放牧",
+                milk: "奶牛挤奶",
+              }[barnMode]}</div>
               <div className="pasture">
-                {world.barn.animals.map((animal, index) => (
-                  <div className="animal" key={animal.id} style={{ left: `${8 + (index * 15) % 80}%`, top: `${25 + (index % 2) * 38}%`, animationDelay: `${index * 0.2}s` }}>
-                    <span>{animal.icon}</span><b>{animal.name}</b><small>饥饿 {animal.hunger}% · 心情 {animal.mood}%</small>
-                  </div>
-                ))}
+                {world.barn.animals.map((animal, index) => {
+                  const visual = animalVisualState(animal, index, barnMode);
+                  return (
+                    <div
+                      className={`animal animal-${animal.kind} behavior-${visual.mode}`}
+                      key={animal.id}
+                      style={{
+                        "--animal-left": `${visual.left}%`,
+                        "--animal-top": `${visual.top}%`,
+                        "--animal-delay": `${index * -0.65}s`,
+                      }}
+                    >
+                      <div className="animal-art">
+                        <img src={ANIMAL_IMAGES[animal.kind]} alt={animal.kind} />
+                        <i className="animal-action-mark" aria-hidden="true" />
+                      </div>
+                      <div className="animal-card">
+                        <b>{animal.name}</b>
+                        <span>{visual.label}</span>
+                        <small>饥饿 {animal.hunger}% · 心情 {animal.mood}%</small>
+                      </div>
+                    </div>
+                  );
+                })}
                 {activeTasks.filter((task) => BARN_ACTIONS.has(task.type)).map((task, index) => {
                   const worker = residents.find((person) => person.id === task.assignee);
                   return <div className={`working-character barn-worker action-${task.type}`} key={task.id} style={{ right: `${8 + index * 20}%`, top: "8%" }}>

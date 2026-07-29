@@ -1,0 +1,489 @@
+.growth-journey {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(90px, 1fr));
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px;
+  overflow-x: auto;
+  border: 1px solid #dbe6d8;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #f7fbf2, #eef5e8);
+}
+
+.growth-step {
+  position: relative;
+  min-width: 86px;
+  padding: 5px 8px 6px;
+  text-align: center;
+}
+
+.growth-step:not(:last-child)::after {
+  position: absolute;
+  top: 34px;
+  right: -8px;
+  z-index: 3;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #d7e8c6;
+  color: #486554;
+  content: "›";
+  font: 700 16px/15px system-ui;
+}
+
+.growth-step-art {
+  height: 56px;
+  display: grid;
+  place-items: end center;
+}
+
+.growth-step-art img {
+  width: 76px;
+  height: 56px;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 2px rgba(49, 79, 43, 0.16));
+}
+
+.growth-step span,
+.growth-step b {
+  display: block;
+}
+
+.growth-step span {
+  margin-top: 3px;
+  color: #7a9081;
+  font: 8px "DM Mono", monospace;
+  letter-spacing: 0.08em;
+}
+
+.growth-step b {
+  color: #294f3f;
+  font-size: 10px;
+}
+
+.field-scene {
+  min-height: 0;
+  aspect-ratio: 1672 / 941;
+  padding: 0;
+  border-color: #8eb87a;
+  background: url("/assets/farm/field-anime-v1.webp") center / cover no-repeat;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+
+.field-scene::before {
+  display: none;
+}
+
+.field-scene .plot-grid {
+  position: absolute;
+  inset: 25% 12% 22% 17%;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr)) minmax(0, 1.6fr);
+  gap: 2% 1.5%;
+  margin: 0;
+}
+
+.field-scene .plot {
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: #18382d;
+  opacity: 1;
+}
+
+.field-scene .plot.empty {
+  background: transparent;
+  opacity: 0.72;
+}
+
+.field-scene .plot.empty:hover {
+  background: rgba(224, 244, 181, 0.26);
+  outline: 2px dashed rgba(241, 255, 218, 0.8);
+}
+
+.field-scene .plot-number {
+  top: 6px;
+  left: 7px;
+  z-index: 3;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgba(255, 253, 246, 0.8);
+  color: #53685a;
+  font-size: 8px;
+  backdrop-filter: blur(3px);
+}
+
+.field-scene .crop-sprite {
+  position: absolute;
+  inset: -17% 4% 14%;
+  display: grid;
+  place-items: end center;
+  height: auto;
+  line-height: 1;
+  transform-origin: 50% 92%;
+  animation: crop-stage-enter 0.72s cubic-bezier(0.2, 1.5, 0.4, 1) both,
+    crop-alive 3.2s 0.75s ease-in-out infinite;
+}
+
+.field-scene .crop-sprite img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  filter: drop-shadow(0 5px 3px rgba(47, 66, 31, 0.28));
+  transform-origin: 50% 92%;
+  transition: opacity 0.9s linear, transform 0.9s linear;
+}
+
+.field-scene .crop-next-stage {
+  z-index: 2;
+}
+
+.field-scene .crop-sprite > span {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border: 1px dashed rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: rgba(73, 117, 58, 0.32);
+  color: white;
+  font-size: 18px;
+}
+
+.plot-caption {
+  position: absolute;
+  right: 5px;
+  bottom: 6px;
+  left: 5px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 7px;
+  background: rgba(255, 253, 246, 0.82);
+  box-shadow: 0 2px 5px rgba(74, 54, 29, 0.12);
+  backdrop-filter: blur(4px);
+}
+
+.field-scene .plot-caption strong,
+.field-scene .plot-caption small {
+  display: block;
+  color: #365244;
+  font-size: 8px;
+  line-height: 1;
+}
+
+.field-scene .water-meter {
+  position: absolute;
+  right: 10px;
+  bottom: 2px;
+  left: 10px;
+  z-index: 5;
+  height: 3px;
+  margin: 0;
+  background: rgba(78, 65, 43, 0.3);
+}
+
+.field-scene .field-workers {
+  z-index: 8;
+}
+
+.barn-scene {
+  min-height: 0;
+  height: auto;
+  aspect-ratio: 1672 / 941;
+  border-color: #8eb87a;
+  background: url("/assets/farm/pasture-anime-v1.webp") center / cover no-repeat;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.38);
+}
+
+.barn-scene::after,
+.barn-scene .barn-building {
+  display: none;
+}
+
+.barn-mode-badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: 999px;
+  background: rgba(255, 253, 246, 0.88);
+  color: #315b46;
+  font-size: 10px;
+  font-weight: 800;
+  box-shadow: 0 5px 16px rgba(40, 76, 42, 0.18);
+  backdrop-filter: blur(6px);
+}
+
+.barn-mode-badge i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #82bd45;
+  box-shadow: 0 0 0 4px rgba(130, 189, 69, 0.18);
+}
+
+.barn-scene .animal {
+  position: absolute;
+  left: var(--animal-left);
+  top: var(--animal-top);
+  z-index: 5;
+  width: clamp(64px, 7vw, 104px);
+  text-align: center;
+  animation: none;
+  transition: left 2.1s cubic-bezier(0.22, 0.8, 0.32, 1),
+    top 2.1s cubic-bezier(0.22, 0.8, 0.32, 1);
+}
+
+.animal-art {
+  position: relative;
+  transform-origin: 50% 90%;
+  animation-delay: var(--animal-delay) !important;
+}
+
+.animal-art img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 5px 4px rgba(53, 72, 39, 0.25));
+}
+
+.animal-action-mark {
+  position: absolute;
+  top: -5px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  min-width: 23px;
+  height: 23px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #fffdf6;
+  box-shadow: 0 3px 8px rgba(42, 71, 43, 0.2);
+  font-style: normal;
+  font-size: 12px;
+  animation: action-mark-pop 1.4s ease-in-out infinite;
+}
+
+.behavior-idle .animal-action-mark::before {
+  content: "♪";
+}
+
+.behavior-feed .animal-action-mark::before {
+  content: "🌾";
+}
+
+.behavior-graze .animal-action-mark::before {
+  content: "🌿";
+}
+
+.behavior-milk .animal-action-mark::before {
+  content: "🥛";
+}
+
+.behavior-idle .animal-art {
+  animation: animal-breathe 2.8s ease-in-out infinite;
+}
+
+.behavior-feed .animal-art {
+  animation: animal-feed-natural 1.35s ease-in-out infinite;
+}
+
+.behavior-graze .animal-art {
+  animation: animal-walk-and-graze 5.6s ease-in-out infinite;
+}
+
+.behavior-milk .animal-art {
+  animation: animal-milk-settle 2.4s ease-in-out infinite;
+}
+
+.animal-card {
+  position: absolute;
+  top: 82%;
+  left: 50%;
+  min-width: 88px;
+  transform: translateX(-50%);
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 8px;
+  background: rgba(255, 253, 246, 0.9);
+  color: #315344;
+  box-shadow: 0 3px 9px rgba(47, 70, 36, 0.15);
+  backdrop-filter: blur(5px);
+}
+
+.barn-scene .animal-card b,
+.barn-scene .animal-card span,
+.barn-scene .animal-card small {
+  display: block;
+  padding: 0;
+  background: transparent;
+}
+
+.barn-scene .animal-card b {
+  border-radius: 0;
+  font-size: 9px;
+  line-height: 1.1;
+}
+
+.barn-scene .animal-card span {
+  margin-top: 2px;
+  color: #6a7d6e;
+  font-size: 7px;
+}
+
+.barn-scene .animal-card small {
+  display: none;
+  margin-top: 3px;
+  color: #718174;
+  font-size: 7px;
+}
+
+.barn-scene .animal:hover {
+  z-index: 10;
+}
+
+.barn-scene .animal:hover .animal-card small {
+  display: block;
+}
+
+.barn-scene .barn-worker {
+  z-index: 11;
+}
+
+@keyframes crop-stage-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.55);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes crop-alive {
+  0%,
+  100% {
+    transform: rotate(-1deg) translateY(0);
+  }
+  50% {
+    transform: rotate(1deg) translateY(-2px);
+  }
+}
+
+@keyframes animal-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.015, 0.99);
+  }
+}
+
+@keyframes animal-feed-natural {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0);
+  }
+  35% {
+    transform: translate(4px, 4px) rotate(5deg);
+  }
+  55% {
+    transform: translate(4px, 7px) rotate(8deg);
+  }
+  72% {
+    transform: translate(2px, 5px) rotate(5deg);
+  }
+}
+
+@keyframes animal-walk-and-graze {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0);
+  }
+  24% {
+    transform: translate(9px, -3px) rotate(-1deg);
+  }
+  48% {
+    transform: translate(19px, 3px) rotate(2deg);
+  }
+  62% {
+    transform: translate(20px, 8px) rotate(9deg);
+  }
+  78% {
+    transform: translate(10px, 7px) rotate(7deg);
+  }
+}
+
+@keyframes animal-milk-settle {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  35% {
+    transform: translateY(2px) rotate(-1deg);
+  }
+  70% {
+    transform: translateY(1px) rotate(1deg);
+  }
+}
+
+@keyframes action-mark-pop {
+  0%,
+  100% {
+    transform: translateY(0) scale(0.95);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.05);
+  }
+}
+
+@media (max-width: 760px) {
+  .growth-journey {
+    grid-template-columns: repeat(5, 100px);
+  }
+
+  .field-scene,
+  .barn-scene {
+    width: 680px;
+    max-width: none;
+    min-height: 0;
+  }
+
+  .world-panel {
+    overflow-x: auto;
+  }
+
+  .field-scene .plot-caption {
+    display: none;
+  }
+
+  .barn-scene .animal {
+    width: 70px;
+  }
+}
