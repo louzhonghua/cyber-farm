@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import './ai.css'
+import './chat.css'
 
 const seed = {
   time: 560,
@@ -78,6 +79,7 @@ export default function App() {
   const [filter, setFilter] = useState('all')
   const [activePersonId, setActivePersonId] = useState(null)
   const [chat, setChat] = useState([])
+  const [isReplying, setIsReplying] = useState(false)
   const [message, setMessage] = useState('')
   const [taskModal, setTaskModal] = useState(false)
   const [taskDraft, setTaskDraft] = useState({ assignee: 'linxia', type: 'harvest', priority: 2 })
@@ -124,6 +126,9 @@ export default function App() {
     event.preventDefault()
     const input = message.trim()
     if (!input || !activePerson) return
+    setChat((old) => [...old, { kind: 'player', text: input }])
+    setMessage('')
+    setIsReplying(true)
     let response = '我记下了。有什么需要我帮忙处理的吗？'
     let type = null
     if (/番茄|收获|收菜/.test(input)) { type = 'harvest'; response = activePerson.role === 'farmer' ? '好，我会优先处理南侧番茄田，收完后向你汇报。' : '番茄田需要农民照料；我已经替你通知一位农民。' }
@@ -143,7 +148,7 @@ export default function App() {
     }
     if (type) { const worker = activePerson.role === taskConfig[type].role ? activePerson : state.residents.find((item) => item.role === taskConfig[type].role); createTask(worker.id, type, 3) }
     setState((old) => addMemory(old, activePerson.name, '与玩家的一次交谈', `玩家说：“${input.slice(0, 60)}”。${activePerson.name}的回应已记录。`))
-    setChat((old) => [...old, { kind: 'player', text: input }, { kind: 'npc', text: response }]); setMessage('')
+    setChat((old) => [...old, { kind: 'npc', text: response }]); setIsReplying(false)
   }
 
   const briefings = [
@@ -164,7 +169,7 @@ export default function App() {
       {tab === 'tasks' && <section><div className="section-heading"><div><p className="eyebrow">人机协作</p><h2>任务中心</h2></div><button className="primary-button" onClick={() => setTaskModal(true)}>＋ 新建任务</button></div><div className="task-summary">{[['active', '执行中'], ['queued', '等待中'], ['done', '今日完成']].map(([id, label]) => <div key={id}><span>{counts[id]}</span><small>{label}</small></div>)}</div><div className="task-list">{state.tasks.map((task) => <article className="task-item" key={task.id}><i className={`priority-dot priority-${task.priority}`} /><div><h3>{task.title}</h3><p>{person(task.assignee).name} · {task.detail}</p></div><span className="task-status">{{ active: '执行中', queued: '等待中', done: '已完成' }[task.status]}</span>{task.status !== 'done' && <button className="complete-task" onClick={() => completeTask(task.id)}>标为完成</button>}</article>)}</div></section>}
       {tab === 'memory' && <section><div className="section-heading"><div><p className="eyebrow">关系与经历</p><h2>记忆档案</h2></div><p className="muted">只保留对居民关系和行为有影响的事件</p></div><div className="memory-list">{state.memories.map((memory, index) => <article className="memory-item" key={`${memory.date}-${index}`}><div className="memory-date">{memory.date}<br /><br />{memory.person}</div><div><h3>{memory.title}</h3><p>{memory.text}</p></div></article>)}</div></section>}
     </main>
-    {activePerson && <div className="modal"><div className="dialogue-window"><button className="close-button" onClick={() => setActivePersonId(null)}>×</button><div className="dialogue-person"><Avatar person={activePerson} /><div><h2>{activePerson.name}</h2><p>{activePerson.roleName} · {activePerson.traits.join(' · ')}</p></div></div><div className="chat-log">{chat.map((item, index) => <div key={index} className={`message ${item.kind}`}>{item.text}</div>)}</div><form className="chat-form" onSubmit={sendChat}><input value={message} onChange={(event) => setMessage(event.target.value)} autoFocus placeholder="例如：今天优先收获番茄" /><button className="primary-button" type="submit">发送</button></form><p className="input-hint">试试：收番茄 / 去放牧 / 你喜欢这里吗？</p></div></div>}
+    {activePerson && <div className="modal"><div className="dialogue-window"><button className="close-button" onClick={() => setActivePersonId(null)}>×</button><div className="dialogue-person"><Avatar person={activePerson} /><div><h2>{activePerson.name}</h2><p>{activePerson.roleName} · {activePerson.traits.join(' · ')}</p></div></div><div className="chat-log">{chat.map((item, index) => <div key={index} className={`message ${item.kind}`}>{item.text}</div>)}{isReplying && <div className="message npc thinking"><i /><i /><i /><span>{activePerson.name} 正在思考…</span></div>}</div><form className="chat-form" onSubmit={sendChat}><input disabled={isReplying} value={message} onChange={(event) => setMessage(event.target.value)} autoFocus placeholder={isReplying ? '正在生成回复…' : '例如：今天优先收获番茄'} /><button className="primary-button" disabled={isReplying} type="submit">{isReplying ? '生成中' : '发送'}</button></form><p className="input-hint">{isReplying ? '模型正在结合角色记忆与农场状态生成回复。' : '试试：收番茄 / 去放牧 / 你喜欢这里吗？'}</p></div></div>}
     {taskModal && <div className="modal"><form className="form-window" onSubmit={(event) => { event.preventDefault(); if (createTask(taskDraft.assignee, taskDraft.type, taskDraft.priority)) setTaskModal(false) }}><button type="button" className="close-button" onClick={() => setTaskModal(false)}>×</button><p className="eyebrow">清晰的任务会被优先执行</p><h2>安排一项工作</h2><label>交给谁<select value={taskDraft.assignee} onChange={(event) => setTaskDraft((old) => ({ ...old, assignee: event.target.value }))}>{state.residents.map((resident) => <option value={resident.id} key={resident.id}>{resident.name} · {resident.roleName}</option>)}</select></label><label>工作内容<select value={taskDraft.type} onChange={(event) => setTaskDraft((old) => ({ ...old, type: event.target.value }))}>{Object.entries(taskConfig).map(([id, config]) => <option value={id} key={id}>{config.title}</option>)}</select></label><label>优先级<div className="priority-input"><input type="range" min="1" max="3" value={taskDraft.priority} onChange={(event) => setTaskDraft((old) => ({ ...old, priority: event.target.value }))} /><span>{['', '低', '普通', '紧急'][taskDraft.priority]}</span></div></label><button className="primary-button" type="submit">确认安排</button></form></div>}
     <button className="ai-fab" onClick={() => setAiModal(true)}>✦ AI 设置</button>
     {aiModal && <div className="modal"><form className="form-window ai-window" onSubmit={(event) => { event.preventDefault(); setAiModal(false); setNotice(aiConfig.apiKey ? `已连接 ${aiProviders[aiConfig.provider].label}` : '未填写 API Key，将继续使用本地规则') }}><button type="button" className="close-button" onClick={() => setAiModal(false)}>×</button><p className="eyebrow">AI 对话引擎</p><h2>选择你的模型</h2><label>服务商<select value={aiConfig.provider} onChange={(event) => { const provider = event.target.value; setAiConfig((old) => ({ ...old, provider, model: aiProviders[provider].models[0] })) }}>{Object.entries(aiProviders).map(([id, provider]) => <option key={id} value={id}>{provider.label}</option>)}</select></label><label>模型<select value={aiConfig.model} onChange={(event) => setAiConfig((old) => ({ ...old, model: event.target.value }))}>{aiProviders[aiConfig.provider].models.map((model) => <option key={model}>{model}</option>)}</select></label><label>你的 API Key<input type="password" value={aiConfig.apiKey} onChange={(event) => setAiConfig((old) => ({ ...old, apiKey: event.target.value }))} placeholder="仅在本次页面会话中使用" autoComplete="off" /></label><p className="input-hint">密钥不会写入农场存档。连接后，NPC 会按所选模型生成回复并提炼记忆。</p><button className="primary-button" type="submit">保存 AI 设置</button></form></div>}
