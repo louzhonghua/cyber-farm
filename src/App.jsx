@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./farm-game.css";
 import "./farm-animations.css";
+import "./icon-fix.css";
 
 const CROP_STAGES = ["种子", "幼苗", "生长", "开花", "成熟"];
 const CROP_ICONS = ["·", "˙", "🌱", "🌿", "🍅"];
@@ -45,6 +46,35 @@ const residents = [
   { id: "muye", name: "牧野", role: "rancher", roleName: "牧民", icon: "🧑🏾", traits: ["沉稳", "务实", "方向感强"], prompt: "你是牧野，沉稳务实的放牧能手。擅长路线判断和天气观察。" },
   { id: "xiya", name: "希娅", role: "staff", roleName: "旅店员工", icon: "☕", traits: ["健谈", "好奇", "手艺好"], prompt: "你是希娅，热情健谈的旅店员工。关注客人、菜谱和镇上的新鲜事。" },
 ];
+
+const residentFaces = {
+  linxia: "👩",
+  ahe: "🧑",
+  suyun: "👨",
+  nanxing: "👩",
+  qiao: "🧑",
+  zhiyuan: "🤠",
+  mo: "🧑",
+  cang: "👨",
+  lulu: "👩",
+  muye: "👨",
+  xiya: "🙂",
+};
+
+const roleBadges = {
+  farmer: "🌱",
+  rancher: "🐾",
+  staff: "☕",
+};
+
+function ResidentAvatar({ person }) {
+  return (
+    <div className={`resident-portrait ${person.role}`} aria-label={`${person.name}，${person.roleName}`}>
+      <span className="avatar-face" aria-hidden="true">{residentFaces[person.id] || "🙂"}</span>
+      <span className="avatar-role-badge" aria-hidden="true">{roleBadges[person.role]}</span>
+    </div>
+  );
+}
 
 const makePlots = () =>
   Array.from({ length: 20 }, (_, index) => ({
@@ -366,7 +396,7 @@ function App() {
             ["field", "🌱", "实时土地"],
             ["barn", "🐄", "实时牧场"],
             ["warehouse", "📦", "中央仓库"],
-            ["residents", "🧑‍🌾", "居民与指令"],
+            ["residents", "👥", "居民与指令"],
             ["tasks", "✓", "任务进度"],
           ].map(([id, icon, label]) => (
             <button key={id} className={activeView === id ? "active" : ""} onClick={() => setActiveView(id)}>
@@ -415,7 +445,7 @@ function App() {
                   const worker = residents.find((person) => person.id === task.assignee);
                   return <div key={task.id} className={`working-character action-${task.type}`} style={{ left: `${10 + (index * 23) % 72}%`, top: `${18 + (index % 2) * 45}%` }}>
                     <div className="work-particle">{taskDefinitions[task.type].icon}</div>
-                    <span>{worker.icon}</span><b>{worker.name}</b><small>{taskDefinitions[task.type].label} {task.progress}%</small>
+                    <span>{residentFaces[worker.id] || "🙂"}</span><b>{worker.name}</b><small>{taskDefinitions[task.type].label} {task.progress}%</small>
                   </div>;
                 })}
               </div>
@@ -442,7 +472,7 @@ function App() {
                 {activeTasks.filter((task) => BARN_ACTIONS.has(task.type)).map((task, index) => {
                   const worker = residents.find((person) => person.id === task.assignee);
                   return <div className={`working-character barn-worker action-${task.type}`} key={task.id} style={{ right: `${8 + index * 20}%`, top: "8%" }}>
-                    <div className="work-particle">{taskDefinitions[task.type].icon}</div><span>{worker.icon}</span><b>{worker.name}</b><small>{taskDefinitions[task.type].label} {task.progress}%</small>
+                    <div className="work-particle">{taskDefinitions[task.type].icon}</div><span>{residentFaces[worker.id] || "🙂"}</span><b>{worker.name}</b><small>{taskDefinitions[task.type].label} {task.progress}%</small>
                   </div>;
                 })}
               </div>
@@ -467,7 +497,7 @@ function App() {
           <section className="residents-live-grid">
             {residents.map((person) => (
               <article key={person.id} className="resident-live-card">
-                <div className={`resident-portrait ${person.role}`}>{person.icon}</div>
+                <ResidentAvatar person={person} />
                 <div><h3>{person.name}</h3><p>{person.roleName} · {person.traits.join(" · ")}</p><small className={workerStatus(person.id) === "等待安排" ? "" : "busy"}>{workerStatus(person.id)}</small></div>
                 <button onClick={() => setSelectedNpc(person.id)}>交谈 / 下指令</button>
               </article>
@@ -499,7 +529,7 @@ function App() {
         <div className="game-modal">
           <div className="chat-window">
             <button className="modal-close" onClick={() => setSelectedNpc(null)}>×</button>
-            <header><div className={`resident-portrait ${selectedPerson.role}`}>{selectedPerson.icon}</div><div><h2>{selectedPerson.name}</h2><p>{selectedPerson.roleName} · {workerStatus(selectedPerson.id)}</p></div></header>
+            <header><ResidentAvatar person={selectedPerson} /><div><h2>{selectedPerson.name}</h2><p>{selectedPerson.roleName} · {workerStatus(selectedPerson.id)}</p></div></header>
             <div className="chat-messages">
               {chat.length === 0 && <div className="chat-welcome">和{selectedPerson.name}聊聊，或者直接说“去浇水”“播种番茄”“带动物放牧”。</div>}
               {chat.map((item, index) => <div className={`chat-bubble ${item.role}`} key={`${item.role}-${index}`}>{item.text}</div>)}
