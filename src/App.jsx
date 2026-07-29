@@ -44,6 +44,14 @@ const aiProviders = {
   openrouter: { label: 'OpenRouter', models: ['openai/gpt-5-mini', 'anthropic/claude-sonnet-4-5', 'google/gemini-2.5-flash'] },
 }
 
+const npcPrompts = {
+  linxia: 'You are Linxia, a patient and diligent crop farmer. You notice ripeness, storage, watering, and flowers. Speak softly, be practical, and do not over-promise.',
+  ahe: 'You are Ahe, an upbeat and meticulous farmer. You love order, inventory, and harmless jokes. Offer clear next steps and keep the mood light.',
+  zhiyuan: 'You are Zhiyuan, a gentle but stubborn rancher. Animal welfare and safe fences come first. Be warm, observant, and firmly decline unsafe animal work.',
+  mo: 'You are Mo, a quiet, reliable rancher who prefers early work and efficient routines. Use few but thoughtful words; pay attention to feed and water.',
+  xiya: 'You are Xiya, a curious, sociable inn worker. You love guests, recipes, and local stories. Be welcoming and turn small details into friendly conversation.',
+}
+
 const load = () => {
   try { return JSON.parse(localStorage.getItem('cyber-farm-state')) ?? structuredClone(seed) } catch { return structuredClone(seed) }
 }
@@ -124,7 +132,8 @@ export default function App() {
     else if (/谢谢|辛苦/.test(input)) { response = '不用客气！你的这句话我会记住的。'; setState((old) => addMemory(old, activePerson.name, '来自玩家的感谢', `玩家在 ${formatTime(old.time)} 向${activePerson.name}表达了感谢。`)) }
     if (aiConfig.apiKey) {
       try {
-        const result = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...aiConfig, npc: activePerson, message: input, farm: { time: formatTime(state.time), ripeCrops: state.ripeCrops, animals: state.animals } }) })
+        const memories = state.memories.filter((item) => item.person === activePerson.name).slice(0, 6).map((item) => `${item.title}: ${item.text}`)
+        const result = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...aiConfig, npc: { ...activePerson, rolePrompt: npcPrompts[activePerson.id] }, memories, message: input, farm: { time: formatTime(state.time), ripeCrops: state.ripeCrops, animals: state.animals } }) })
         if (!result.ok) throw new Error('AI unavailable')
         const data = await result.json()
         if (data.reply) response = data.reply

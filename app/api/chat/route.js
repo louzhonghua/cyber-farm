@@ -11,9 +11,9 @@ const providers = {
 
 export async function POST(request) {
   try {
-    const { provider, model, apiKey, npc, message, farm } = await request.json()
+    const { provider, model, apiKey, npc, memories = [], message, farm } = await request.json()
     if (!providers[provider] || !apiKey || !npc?.name || !message) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
-    const system = `You are Chinese cyber-farm NPC ${npc.name}, a ${npc.roleName}. Traits: ${(npc.traits || []).join(', ')}. Memory: ${npc.memory || 'none'}. Farm time ${farm?.time}; ripe crops ${farm?.ripeCrops}; animals ${farm?.animals}. Reply naturally in concise Chinese. Never claim an unfinished task is complete. Return only JSON: {"reply":"...","memory":"important fact or null","task":{"type":"harvest|graze|feed|store"}|null}.`
+    const system = `You are Chinese cyber-farm NPC ${npc.name}, a ${npc.roleName}. Character directive: ${npc.rolePrompt || 'Be helpful and in character.'} Traits: ${(npc.traits || []).join(', ')}. Personal long-term memories: ${(memories || []).join(' | ') || npc.memory || 'none'}. Current farm state: time ${farm?.time}; ripe crops ${farm?.ripeCrops}; animals ${farm?.animals}. Answer the player in natural, concise Chinese strictly in this character's voice. Treat memories as true personal experiences, but do not invent new past events. Never claim an unfinished task is complete. Return only JSON: {"reply":"...","memory":"a single important long-term fact to retain, or null","task":{"type":"harvest|graze|feed|store"}|null}.`
     if (provider === 'anthropic') {
       const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }, body: JSON.stringify({ model, max_tokens: 600, system, messages: [{ role: 'user', content: String(message).slice(0, 1000) }] }) })
       if (!response.ok) return NextResponse.json({ error: 'Provider request failed' }, { status: 502 })
