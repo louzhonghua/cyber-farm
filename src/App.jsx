@@ -32,6 +32,12 @@ const taskConfig = {
   store: { title: '整理中央仓库', detail: () => '按种子与产物分类', role: 'farmer' },
 }
 
+const aiProviders = {
+  openai: { label: 'OpenAI', models: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-5-mini'] },
+  deepseek: { label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'] },
+  qwen: { label: '通义千问', models: ['qwen-plus', 'qwen-turbo', 'qwen-max'] },
+}
+
 const load = () => {
   try { return JSON.parse(localStorage.getItem('cyber-farm-state')) ?? structuredClone(seed) } catch { return structuredClone(seed) }
 }
@@ -62,6 +68,8 @@ export default function App() {
   const [taskModal, setTaskModal] = useState(false)
   const [taskDraft, setTaskDraft] = useState({ assignee: 'linxia', type: 'harvest', priority: 2 })
   const [notice, setNotice] = useState('')
+  const [aiModal, setAiModal] = useState(false)
+  const [aiConfig, setAiConfig] = useState({ provider: 'openai', model: 'gpt-4.1-mini', apiKey: '' })
 
   useEffect(() => { localStorage.setItem('cyber-farm-state', JSON.stringify(state)) }, [state])
   useEffect(() => { if (!notice) return undefined; const timer = window.setTimeout(() => setNotice(''), 2500); return () => window.clearTimeout(timer) }, [notice])
@@ -98,7 +106,7 @@ export default function App() {
     setNotice('任务已完成')
   }
   const openChat = (id) => { const resident = person(id); setActivePersonId(id); setChat([{ kind: 'npc', text: `你好，今天农场的空气很好。${resident.memory}` }]); setMessage('') }
-  const sendChat = (event) => {
+  const sendChat = async (event) => {
     event.preventDefault()
     const input = message.trim()
     if (!input || !activePerson) return
@@ -108,6 +116,16 @@ export default function App() {
     else if (/放牧|羊|牛|牲畜/.test(input)) { type = 'graze'; response = activePerson.role === 'rancher' ? '明白，天气正好，我会带动物去东侧草场。' : '牲畜的事交给牧民更合适，我已经替你转达。' }
     else if (/喜欢|这里|心情|怎么样/.test(input)) response = `我挺喜欢这里的。${activePerson.traits[0]}的我，最在意农场里每个人都能安心做自己的事。`
     else if (/谢谢|辛苦/.test(input)) { response = '不用客气！你的这句话我会记住的。'; setState((old) => addMemory(old, activePerson.name, '来自玩家的感谢', `玩家在 ${formatTime(old.time)} 向${activePerson.name}表达了感谢。`)) }
+    if (aiConfig.apiKey) {
+      try {
+        const result = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...aiConfig, npc: activePerson, message: input, farm: { time: formatTime(state.time), ripeCrops: state.ripeCrops, animals: state.animals } }) })
+        if (!result.ok) throw new Error('AI unavailable')
+        const data = await result.json()
+        if (data.reply) response = data.reply
+        if (data.task && taskConfig[data.task.type]) type = data.task.type
+        if (data.memory) setState((old) => addMemory(old, activePerson.name, 'AI 归纳的长期记忆', String(data.memory).slice(0, 180)))
+      } catch { setNotice('AI 暂时不可用，已使用本地规则回复') }
+    }
     if (type) { const worker = activePerson.role === taskConfig[type].role ? activePerson : state.residents.find((item) => item.role === taskConfig[type].role); createTask(worker.id, type, 3) }
     setState((old) => addMemory(old, activePerson.name, '与玩家的一次交谈', `玩家说：“${input.slice(0, 60)}”。${activePerson.name}的回应已记录。`))
     setChat((old) => [...old, { kind: 'player', text: input }, { kind: 'npc', text: response }]); setMessage('')
@@ -133,6 +151,8 @@ export default function App() {
     </main>
     {activePerson && <div className="modal"><div className="dialogue-window"><button className="close-button" onClick={() => setActivePersonId(null)}>×</button><div className="dialogue-person"><Avatar person={activePerson} /><div><h2>{activePerson.name}</h2><p>{activePerson.roleName} · {activePerson.traits.join(' · ')}</p></div></div><div className="chat-log">{chat.map((item, index) => <div key={index} className={`message ${item.kind}`}>{item.text}</div>)}</div><form className="chat-form" onSubmit={sendChat}><input value={message} onChange={(event) => setMessage(event.target.value)} autoFocus placeholder="例如：今天优先收获番茄" /><button className="primary-button" type="submit">发送</button></form><p className="input-hint">试试：收番茄 / 去放牧 / 你喜欢这里吗？</p></div></div>}
     {taskModal && <div className="modal"><form className="form-window" onSubmit={(event) => { event.preventDefault(); if (createTask(taskDraft.assignee, taskDraft.type, taskDraft.priority)) setTaskModal(false) }}><button type="button" className="close-button" onClick={() => setTaskModal(false)}>×</button><p className="eyebrow">清晰的任务会被优先执行</p><h2>安排一项工作</h2><label>交给谁<select value={taskDraft.assignee} onChange={(event) => setTaskDraft((old) => ({ ...old, assignee: event.target.value }))}>{state.residents.map((resident) => <option value={resident.id} key={resident.id}>{resident.name} · {resident.roleName}</option>)}</select></label><label>工作内容<select value={taskDraft.type} onChange={(event) => setTaskDraft((old) => ({ ...old, type: event.target.value }))}>{Object.entries(taskConfig).map(([id, config]) => <option value={id} key={id}>{config.title}</option>)}</select></label><label>优先级<div className="priority-input"><input type="range" min="1" max="3" value={taskDraft.priority} onChange={(event) => setTaskDraft((old) => ({ ...old, priority: event.target.value }))} /><span>{['', '低', '普通', '紧急'][taskDraft.priority]}</span></div></label><button className="primary-button" type="submit">确认安排</button></form></div>}
+    <button className="ai-fab" onClick={() => setAiModal(true)}>✦ AI 设置</button>
+    {aiModal && <div className="modal"><form className="form-window ai-window" onSubmit={(event) => { event.preventDefault(); setAiModal(false); setNotice(aiConfig.apiKey ? `已连接 ${aiProviders[aiConfig.provider].label}` : '未填写 API Key，将继续使用本地规则') }}><button type="button" className="close-button" onClick={() => setAiModal(false)}>×</button><p className="eyebrow">AI 对话引擎</p><h2>选择你的模型</h2><label>服务商<select value={aiConfig.provider} onChange={(event) => { const provider = event.target.value; setAiConfig((old) => ({ ...old, provider, model: aiProviders[provider].models[0] })) }}>{Object.entries(aiProviders).map(([id, provider]) => <option key={id} value={id}>{provider.label}</option>)}</select></label><label>模型<select value={aiConfig.model} onChange={(event) => setAiConfig((old) => ({ ...old, model: event.target.value }))}>{aiProviders[aiConfig.provider].models.map((model) => <option key={model}>{model}</option>)}</select></label><label>你的 API Key<input type="password" value={aiConfig.apiKey} onChange={(event) => setAiConfig((old) => ({ ...old, apiKey: event.target.value }))} placeholder="仅在本次页面会话中使用" autoComplete="off" /></label><p className="input-hint">密钥不会写入农场存档。连接后，NPC 会按所选模型生成回复并提炼记忆。</p><button className="primary-button" type="submit">保存 AI 设置</button></form></div>}
     {notice && <div className="toast">{notice}</div>}
   </div>
 }
