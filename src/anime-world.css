@@ -210,15 +210,15 @@
   left: var(--worker-x);
   top: var(--worker-y);
   width: var(--worker-width);
-  transform: translate(-50%, -92%);
+  transform: translate(var(--worker-anchor-x), var(--worker-anchor-y));
   transform-origin: 50% 100%;
 }
 
 .field-worker-art {
   position: relative;
   width: 100%;
-  aspect-ratio: 460 / 620;
-  filter: drop-shadow(0 5px 4px rgba(53, 72, 39, 0.28));
+  aspect-ratio: 1;
+  filter: drop-shadow(0 3px 2px rgba(53, 72, 39, 0.28));
 }
 
 .field-worker-frame {
@@ -228,6 +228,7 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+  image-rendering: pixelated;
   opacity: 0;
   animation: field-worker-frame-cycle 1.16s step-end infinite;
   animation-delay: calc(var(--frame-index) * 0.29s);
@@ -434,6 +435,16 @@
 
 .barn-scene .barn-worker {
   z-index: 11;
+}
+
+.barn-worker-pixel {
+  display: block;
+  width: 50px;
+  height: 58px;
+  margin: -10px auto -5px;
+  object-fit: contain;
+  object-position: center bottom;
+  image-rendering: pixelated;
 }
 
 @keyframes crop-stage-enter {

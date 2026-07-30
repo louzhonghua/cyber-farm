@@ -30,6 +30,18 @@
   transform: translateY(-1px);
 }
 
+.avatar-pixel {
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  width: 50px;
+  height: 67px;
+  object-fit: contain;
+  object-position: center bottom;
+  transform: translateX(-50%);
+  image-rendering: pixelated;
+}
+
 .avatar-role-badge {
   position: absolute;
   z-index: 2;

@@ -44,16 +44,23 @@ const PLOT_LAYOUT = [
   { x: 81.49, y: 70.46, w: 15.49, h: 15.62 },
 ];
 
-const fieldWorkerPosition = (plotId) => {
+const FIELD_ACTION_ANCHORS = {
+  sow: { x: -68, y: -82 },
+  water: { x: -68, y: -84 },
+  harvest: { x: -74, y: -88 },
+};
+
+const fieldWorkerPosition = (plotId, action) => {
   const plotIndex = Math.max(0, Math.min(PLOT_LAYOUT.length - 1, Number(plotId || 1) - 1));
   const plot = PLOT_LAYOUT[plotIndex];
-  const column = plotIndex % 5;
   const row = Math.floor(plotIndex / 5);
-  const side = column >= 3 ? -1 : 1;
+  const anchor = FIELD_ACTION_ANCHORS[action] || FIELD_ACTION_ANCHORS.sow;
   return {
-    "--worker-x": `${plot.x + side * plot.w * 0.48}%`,
-    "--worker-y": `${plot.y + plot.h * 0.52}%`,
-    "--worker-width": `${6.4 + row * 0.72}%`,
+    "--worker-x": `${plot.x}%`,
+    "--worker-y": `${plot.y + plot.h * 0.36}%`,
+    "--worker-width": `${8 + row * 0.6}%`,
+    "--worker-anchor-x": `${anchor.x}%`,
+    "--worker-anchor-y": `${anchor.y}%`,
     zIndex: 12 + row,
   };
 };
@@ -121,20 +128,6 @@ const residents = [
   { id: "xiya", name: "希娅", role: "staff", roleName: "旅店员工", icon: "☕", traits: ["健谈", "好奇", "手艺好"], prompt: "你是希娅，热情健谈的旅店员工。关注客人、菜谱和镇上的新鲜事。" },
 ];
 
-const residentFaces = {
-  linxia: "👩",
-  ahe: "🧑",
-  suyun: "👨",
-  nanxing: "👩",
-  qiao: "🧑",
-  zhiyuan: "🤠",
-  mo: "🧑",
-  cang: "👨",
-  lulu: "👩",
-  muye: "👨",
-  xiya: "🙂",
-};
-
 const roleBadges = {
   farmer: "🌱",
   rancher: "🐾",
@@ -144,7 +137,12 @@ const roleBadges = {
 function ResidentAvatar({ person }) {
   return (
     <div className={`resident-portrait ${person.role}`} aria-label={`${person.name}，${person.roleName}`}>
-      <span className="avatar-face" aria-hidden="true">{residentFaces[person.id] || "🙂"}</span>
+      <img
+        className="avatar-pixel"
+        src={`/assets/farm/resident-${person.id}-pixel-v2.webp`}
+        alt=""
+        aria-hidden="true"
+      />
       <span className="avatar-role-badge" aria-hidden="true">{roleBadges[person.role]}</span>
     </div>
   );
@@ -697,7 +695,7 @@ function App() {
                     <div
                       key={task.id}
                       className={`field-worker action-${task.type}`}
-                      style={fieldWorkerPosition(task.targetPlotId)}
+                      style={fieldWorkerPosition(task.targetPlotId, task.type)}
                       aria-label={`${worker.name} ${taskDisplayLabel(task)} ${task.progress}%`}
                     >
                       <div className="field-worker-art" aria-hidden="true">
@@ -705,7 +703,7 @@ function App() {
                           <img
                             key={frame}
                             className="field-worker-frame"
-                            src={`/assets/farm/worker-${task.type}-frame-${frame}-v1.webp`}
+                            src={`/assets/farm/worker-${worker.id}-${task.type}-frame-${frame}-pixel-v2.webp`}
                             alt=""
                             style={{ "--frame-index": frame }}
                           />
@@ -766,7 +764,9 @@ function App() {
                 {activeTasks.filter((task) => BARN_ACTIONS.has(task.type)).map((task, index) => {
                   const worker = residents.find((person) => person.id === task.assignee);
                   return <div className={`working-character barn-worker action-${task.type}`} key={task.id} style={{ right: `${8 + index * 20}%`, top: "8%" }}>
-                    <div className="work-particle">{taskDefinitions[task.type].icon}</div><span>{residentFaces[worker.id] || "🙂"}</span><b>{worker.name}</b><small>{taskDisplayLabel(task)} {task.progress}%</small>
+                    <div className="work-particle">{taskDefinitions[task.type].icon}</div>
+                    <img className="barn-worker-pixel" src={`/assets/farm/resident-${worker.id}-pixel-v2.webp`} alt="" />
+                    <b>{worker.name}</b><small>{taskDisplayLabel(task)} {task.progress}%</small>
                   </div>;
                 })}
               </div>
