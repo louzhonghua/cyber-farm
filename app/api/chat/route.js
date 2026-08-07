@@ -35,7 +35,8 @@ export async function POST(request) {
       `当前农场实时状态：${JSON.stringify(farm || {})}。`,
       "请始终用自然、简洁的中文，以角色自己的口吻回答。",
       "不能声称尚未完成的工作已经完成。若玩家下达工作，只能确认接受并返回对应任务。",
-      '只返回 JSON：{"reply":"角色台词","memory":"值得长期记住的一条事实或null","task":{"type":"sow|water|harvest|feed|graze|milk"}或null}。',
+      "果园任务使用 pickFruit；只有果树处于成熟阶段时才建议采摘。",
+      '只返回 JSON：{"reply":"角色台词","memory":"值得长期记住的一条事实或null","task":{"type":"sow|water|harvest|feed|graze|collectEggs|collectMilk|playDog|pickFruit"}或null}。',
     ].join("\n");
 
     if (provider === "anthropic") {

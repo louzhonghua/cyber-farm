@@ -7,6 +7,7 @@ import "./icon-fix.css";
 import "./anime-world.css";
 import "./plot-actions.css";
 import "./barn-v2.css";
+import "./orchard-v1.css";
 import { advancePlotGrowth, canHarvestPlot, canWaterPlot, clampCropStage } from "./farm-rules.js";
 import {
   ANIMAL_DEFINITIONS,
@@ -16,6 +17,14 @@ import {
   canCollectAnimal,
   replenishDailyProduce,
 } from "./barn-rules.js";
+import {
+  FRUIT_TREE_DEFINITIONS,
+  TREE_STAGES,
+  advanceTreeGrowth,
+  harvestTree,
+  isRipeTree,
+  treeStageFromProgress,
+} from "./orchard-rules.js";
 
 const CROP_STAGES = ["破土", "幼苗", "生长期", "半成熟", "成熟"];
 const CROP_DEFINITIONS = {
@@ -30,6 +39,29 @@ const cropStageImage = (crop, stage) =>
 const FIELD_ACTIONS = new Set(["sow", "water", "harvest"]);
 const BARN_ACTIONS = new Set(["feed", "graze", "collectEggs", "collectMilk", "playDog"]);
 const BARN_TARGET_ACTIONS = new Set(["collectEggs", "collectMilk", "playDog"]);
+const ORCHARD_ACTIONS = new Set(["pickFruit"]);
+
+const treeStageImage = (kind, stage) =>
+  `/assets/farm/fruit-tree-${FRUIT_TREE_DEFINITIONS[kind]?.id || "apple"}-stage-${Math.min(3, Math.max(0, stage))}-v1.webp`;
+
+const ORCHARD_POSITIONS = [
+  { left: 28.5, top: 39, width: 21 },
+  { left: 50.5, top: 39, width: 21 },
+  { left: 72.5, top: 39, width: 21 },
+  { left: 37, top: 64, width: 25 },
+  { left: 63, top: 64, width: 25 },
+];
+
+const orchardWorkerPosition = (task, trees) => {
+  const treeIndex = Math.max(0, trees.findIndex((tree) => tree.id === task.targetTreeId));
+  const position = ORCHARD_POSITIONS[treeIndex];
+  return {
+    "--orchard-worker-x": `${position.left + (treeIndex % 2 ? 7 : -7)}%`,
+    "--orchard-worker-y": `${position.top + 5}%`,
+    "--orchard-worker-width": `${treeIndex > 2 ? 9.5 : 8.5}%`,
+    zIndex: 30 + treeIndex,
+  };
+};
 
 const PLOT_LAYOUT = [
   { x: 26.3, y: 30.91, w: 11.6, h: 9.35 },
@@ -136,6 +168,7 @@ const taskDefinitions = {
   collectEggs: { label: "收集禽蛋", role: "rancher", place: "barn", icon: "🥚", duration: 90 },
   collectMilk: { label: "采集牛羊奶", role: "rancher", place: "barn", icon: "🥛", duration: 105 },
   playDog: { label: "陪牧场犬玩耍", role: "rancher", place: "barn", icon: "🎾", duration: 80 },
+  pickFruit: { label: "采摘成熟水果", role: "farmer", place: "orchard", icon: "🍎", duration: 105 },
 };
 
 const aiProviders = {
@@ -153,11 +186,11 @@ const aiProviders = {
 };
 
 const residents = [
-  { id: "linxia", name: "林夏", role: "farmer", roleName: "农民", icon: "👩🏻‍🌾", traits: ["勤劳", "慢热", "爱种花"], prompt: "你是林夏，细心温和的作物专家。说话沉静，重视成熟度、土壤和库存，不会夸大承诺。" },
-  { id: "ahe", name: "阿禾", role: "farmer", roleName: "农民", icon: "🧑🏽‍🌾", traits: ["开朗", "细心", "爱玩笑"], prompt: "你是阿禾，开朗又讲究效率的农民。喜欢把步骤说清楚，偶尔讲一个轻松的冷笑话。" },
-  { id: "suyun", name: "苏云", role: "farmer", roleName: "农民", icon: "👨🏻‍🌾", traits: ["理性", "守时", "爱研究"], prompt: "你是苏云，擅长规划轮作和时间的农民。回答简洁、有数据意识，习惯先评估资源。" },
-  { id: "nanxing", name: "南星", role: "farmer", roleName: "农民", icon: "👩🏽‍🌾", traits: ["热情", "大胆", "行动派"], prompt: "你是南星，充满行动力的农民。语气积极，愿意率先下地，但会遵守农场安全规则。" },
-  { id: "qiao", name: "乔木", role: "farmer", roleName: "农民", icon: "🧑🏻‍🌾", traits: ["安静", "可靠", "耐心"], prompt: "你是乔木，寡言可靠的农民。用朴素短句交流，耐心照料每块土地。" },
+  { id: "linxia", name: "林夏", role: "farmer", roleName: "农民", icon: "👩🏻‍🌾", traits: ["勤劳", "慢热", "爱种花"], prompt: "你是林夏，细心温和的作物与果树专家。说话沉静，重视花期、成熟度、土壤和库存，不会夸大承诺。" },
+  { id: "ahe", name: "阿禾", role: "farmer", roleName: "农民", icon: "🧑🏽‍🌾", traits: ["开朗", "细心", "爱玩笑"], prompt: "你是阿禾，开朗又讲究效率的农民，熟悉果园采摘顺序。喜欢把步骤说清楚，偶尔讲一个轻松的冷笑话。" },
+  { id: "suyun", name: "苏云", role: "farmer", roleName: "农民", icon: "👨🏻‍🌾", traits: ["理性", "守时", "爱研究"], prompt: "你是苏云，擅长规划轮作、果树花期和时间的农民。回答简洁、有数据意识，习惯先评估资源。" },
+  { id: "nanxing", name: "南星", role: "farmer", roleName: "农民", icon: "👩🏽‍🌾", traits: ["热情", "大胆", "行动派"], prompt: "你是南星，充满行动力的农民，也愿意率先去果园采摘。语气积极，但会遵守农场安全规则。" },
+  { id: "qiao", name: "乔木", role: "farmer", roleName: "农民", icon: "🧑🏻‍🌾", traits: ["安静", "可靠", "耐心"], prompt: "你是乔木，寡言可靠的农民。用朴素短句交流，耐心照料每块土地和每棵果树。" },
   { id: "zhiyuan", name: "知远", role: "rancher", roleName: "牧民", icon: "🤠", traits: ["温柔", "固执", "动物通"], prompt: "你是知远，温柔但坚持动物福利的牧民。围栏、健康和安全永远优先。" },
   { id: "mo", name: "小墨", role: "rancher", roleName: "牧民", icon: "🧑🏻‍🌾", traits: ["安静", "可靠", "早起"], prompt: "你是小墨，习惯早起、重视饲料和饮水的牧民。话少但观察细致。" },
   { id: "cang", name: "阿苍", role: "rancher", roleName: "牧民", icon: "🧔🏽", traits: ["豪爽", "勇敢", "护短"], prompt: "你是阿苍，豪爽勇敢的牧民。很爱护牲畜，说话直接，有问题会马上报告。" },
@@ -210,6 +243,11 @@ const DEFAULT_WAREHOUSE = {
   鸡蛋: 9,
   鸭蛋: 3,
   鹅蛋: 2,
+  苹果: 0,
+  梨: 0,
+  桃子: 0,
+  香蕉: 0,
+  樱桃: 0,
 };
 
 const DEFAULT_ANIMALS = [
@@ -221,6 +259,14 @@ const DEFAULT_ANIMALS = [
   { id: "sheep-1", name: "云朵", kind: "羊", hunger: 30, mood: 84, age: 72, ready: 1 },
 ];
 
+const DEFAULT_TREES = [
+  { id: "apple-1", kind: "苹果树", progress: 100, yield: 4 },
+  { id: "pear-1", kind: "梨树", progress: 82, yield: 4 },
+  { id: "peach-1", kind: "桃树", progress: 62, yield: 3 },
+  { id: "banana-1", kind: "香蕉树", progress: 38, yield: 5 },
+  { id: "cherry-1", kind: "樱桃树", progress: 12, yield: 6 },
+];
+
 const defaultWorld = {
   day: 12,
   time: 560,
@@ -230,6 +276,7 @@ const defaultWorld = {
     animals: DEFAULT_ANIMALS,
     grazing: false,
   },
+  orchard: { trees: DEFAULT_TREES },
   warehouse: DEFAULT_WAREHOUSE,
   tasks: [],
   memories: [
@@ -237,7 +284,7 @@ const defaultWorld = {
     { person: "知远", text: "玩家很在意牲畜的健康和放牧安全。", time: "春 11 日" },
   ],
   events: [{ id: 1, text: "晨雾谷农场开始了新的一天。", time: "09:20" }],
-  stats: { harvested: 0, planted: 0, milked: 0, eggs: 0, played: 0 },
+  stats: { harvested: 0, planted: 0, milked: 0, eggs: 0, played: 0, fruitPicked: 0 },
 };
 
 const loadJson = (key, fallback) => {
@@ -260,6 +307,16 @@ const normalizeBarnAnimals = (storedAnimals = []) =>
       mood: Math.min(100, Math.max(0, Number(saved?.mood ?? fallbackAnimal.mood))),
       age: Math.min(100, Math.max(0, Number(saved?.age ?? fallbackAnimal.age))),
       ready: Math.min(3, Math.max(0, Number(saved?.ready ?? fallbackAnimal.ready))),
+    };
+  });
+
+const normalizeOrchardTrees = (storedTrees = []) =>
+  DEFAULT_TREES.map((fallbackTree) => {
+    const saved = storedTrees.find((tree) => tree.id === fallbackTree.id);
+    return {
+      ...fallbackTree,
+      progress: Math.min(100, Math.max(0, Number(saved?.progress ?? fallbackTree.progress))),
+      yield: Math.max(1, Number(saved?.yield ?? fallbackTree.yield)),
     };
   });
 
@@ -293,6 +350,11 @@ const normalizeWorldState = (stored) => ({
     ...(stored?.barn || {}),
     animals: normalizeBarnAnimals(stored?.barn?.animals),
   },
+  orchard: {
+    ...defaultWorld.orchard,
+    ...(stored?.orchard || {}),
+    trees: normalizeOrchardTrees(stored?.orchard?.trees),
+  },
   stats: { ...defaultWorld.stats, ...(stored?.stats || {}) },
 });
 
@@ -308,12 +370,17 @@ const taskDisplayLabel = (task) => {
   if (task.type === "collectEggs") return `收集${task.targetAnimalName || "家禽"}的${task.productName || "禽蛋"}`;
   if (task.type === "collectMilk") return `采集${task.targetAnimalName || "牛羊"}的牛奶`;
   if (task.type === "playDog") return `陪${task.targetAnimalName || "牧场犬"}玩耍`;
+  if (task.type === "pickFruit") return `采摘${task.targetTreeName || "果树"}的${task.fruitName || "水果"}`;
   return taskDefinitions[task.type]?.label || "农场任务";
 };
 
 function App() {
   const [world, setWorld] = useState(() => normalizeWorldState(loadJson("cyber-farm-world-v2", defaultWorld)));
-  const [activeView, setActiveView] = useState("field");
+  const [activeView, setActiveView] = useState(() => {
+    if (typeof window === "undefined") return "field";
+    const requested = new URLSearchParams(window.location.search).get("view");
+    return ["field", "barn", "orchard", "warehouse", "residents", "tasks"].includes(requested) ? requested : "field";
+  });
   const [selectedNpc, setSelectedNpc] = useState(null);
   const [selectedPlotId, setSelectedPlotId] = useState(null);
   const [catalogCrop, setCatalogCrop] = useState("番茄");
@@ -460,6 +527,31 @@ function App() {
       next.stats = { ...next.stats, played: next.stats.played + (playedWith ? 1 : 0) };
       next = addEvent(next, playedWith ? `${worker.name}陪${playedWith.name}玩了接球，心情明显变好了。` : "没有找到要互动的牧场犬。");
     }
+    if (task.type === "pickFruit") {
+      const target = next.orchard.trees.find((tree) => tree.id === task.targetTreeId);
+      const definition = FRUIT_TREE_DEFINITIONS[target?.kind];
+      const canPick = target && isRipeTree(target);
+      const amount = canPick ? target.yield : 0;
+      next.orchard = {
+        ...next.orchard,
+        trees: next.orchard.trees.map((tree) =>
+          tree.id === task.targetTreeId && canPick ? harvestTree(tree) : tree,
+        ),
+      };
+      if (amount > 0) {
+        next.warehouse = {
+          ...next.warehouse,
+          [definition.fruit]: (next.warehouse[definition.fruit] || 0) + amount,
+        };
+        next.stats = { ...next.stats, fruitPicked: next.stats.fruitPicked + amount };
+      }
+      next = addEvent(
+        next,
+        amount > 0
+          ? `${worker.name}从${target.kind}采摘 ${amount} 份${definition.fruit}，已送到中央仓库。`
+          : `${target?.kind || "目标果树"}还没有进入成熟期，本次没有采摘。`,
+      );
+    }
     return next;
   };
 
@@ -513,6 +605,10 @@ function App() {
               hunger: Math.min(100, animal.hunger + 2),
             })),
           };
+          next.orchard = {
+            ...next.orchard,
+            trees: next.orchard.trees.map((tree) => advanceTreeGrowth(tree, 2)),
+          };
         }
         return next;
       });
@@ -531,6 +627,8 @@ function App() {
   const readyMilk = world.barn.animals.reduce((sum, animal) =>
     sum + (ANIMAL_DEFINITIONS[animal.kind]?.product === "牛奶" ? animal.ready : 0), 0);
   const matureCount = world.plots.filter((plot) => canHarvestPlot(plot)).length;
+  const ripeTrees = world.orchard.trees.filter((tree) => isRipeTree(tree));
+  const ripeFruitCount = ripeTrees.reduce((sum, tree) => sum + tree.yield, 0);
   const plantedCount = world.plots.filter((plot) => plot.crop).length;
   const cropCycleProgress = (world.time % 120) / 120;
   const selectedPlot = world.plots.find((plot) => plot.id === selectedPlotId) || null;
@@ -563,6 +661,11 @@ function App() {
       }
     }
     const targetAnimal = targetAnimalId ? world.barn.animals.find((animal) => animal.id === targetAnimalId) : null;
+    let targetTreeId = options.targetTreeId || null;
+    if (ORCHARD_ACTIONS.has(type) && !targetTreeId) {
+      targetTreeId = world.orchard.trees.find((tree) => isRipeTree(tree))?.id || null;
+    }
+    const targetTree = targetTreeId ? world.orchard.trees.find((tree) => tree.id === targetTreeId) : null;
     const crop = CROP_DEFINITIONS[options.crop] ? options.crop : catalogCrop;
     const candidates = residents.filter((person) => person.role === definition.role);
     const worker =
@@ -585,6 +688,12 @@ function App() {
     if ((type === "collectEggs" || type === "collectMilk") && !canCollectAnimal(targetAnimal, type)) {
       return setNotice(`${targetAnimal.name}还没有可采集的产物，或尚未成年。`);
     }
+    if (type === "pickFruit" && !targetTree) return setNotice("目前没有成熟果树可以采摘。");
+    if (type === "pickFruit" && !isRipeTree(targetTree)) return setNotice(`${targetTree.kind}还在${TREE_STAGES[treeStageFromProgress(targetTree.progress)]}阶段。`);
+    if (type === "pickFruit" && world.tasks.some((task) =>
+      task.targetTreeId === targetTreeId && ["queued", "working"].includes(task.status))) {
+      return setNotice(`${targetTree.kind}旁已经有农民在采摘。`);
+    }
     if (BARN_TARGET_ACTIONS.has(type) && world.tasks.some((task) =>
       task.targetAnimalId === targetAnimalId && ["queued", "working"].includes(task.status))) {
       return setNotice(`${targetAnimal.name}身边已经有牧民在执行任务。`);
@@ -601,12 +710,15 @@ function App() {
       targetAnimalId: BARN_TARGET_ACTIONS.has(type) ? targetAnimalId : null,
       targetAnimalName: BARN_TARGET_ACTIONS.has(type) ? targetAnimal?.name : null,
       productName: BARN_TARGET_ACTIONS.has(type) ? ANIMAL_DEFINITIONS[targetAnimal?.kind]?.product : null,
+      targetTreeId: ORCHARD_ACTIONS.has(type) ? targetTreeId : null,
+      targetTreeName: ORCHARD_ACTIONS.has(type) ? targetTree?.kind : null,
+      fruitName: ORCHARD_ACTIONS.has(type) ? FRUIT_TREE_DEFINITIONS[targetTree?.kind]?.fruit : null,
       crop: type === "sow" ? crop : targetPlot?.crop || null,
     };
     setWorld((current) => addEvent({ ...current, tasks: [task, ...current.tasks].slice(0, 40) }, `已安排${worker.name}${taskDisplayLabel(task)}。`));
     setActiveView(definition.place);
     setSelectedPlotId(null);
-    setNotice(`${worker.name}已接受任务，前往${definition.place === "field" ? `${targetPlotId} 号地` : targetAnimal ? `${targetAnimal.name}身边` : "牧场"}。`);
+    setNotice(`${worker.name}已接受任务，前往${definition.place === "field" ? `${targetPlotId} 号地` : definition.place === "orchard" ? `${targetTree.kind}旁` : targetAnimal ? `${targetAnimal.name}身边` : "牧场"}。`);
   };
 
   const detectCommand = (text) => {
@@ -618,11 +730,17 @@ function App() {
     if (/收蛋|捡蛋|鸡蛋|鸭蛋|鹅蛋/.test(text)) return "collectEggs";
     if (/挤奶|采奶|牛奶|羊奶/.test(text)) return "collectMilk";
     if (/陪狗|逗狗|遛狗|和狗玩|玩球/.test(text)) return "playDog";
+    if (/采摘|摘果|摘苹果|摘梨|摘桃|摘香蕉|摘樱桃/.test(text)) return "pickFruit";
     return null;
   };
 
   const detectCrop = (text) =>
     Object.keys(CROP_DEFINITIONS).find((crop) => text.includes(crop)) || null;
+
+  const detectFruitTree = (text) =>
+    Object.keys(FRUIT_TREE_DEFINITIONS).find((kind) =>
+      text.includes(kind) || text.includes(FRUIT_TREE_DEFINITIONS[kind].fruit),
+    ) || null;
 
   const sendMessage = async (event) => {
     event.preventDefault();
@@ -652,6 +770,13 @@ function App() {
               matureCount,
               plots: world.plots.map((plot) => ({ crop: plot.crop, stage: plot.stage, hydration: plot.hydration })),
               animals: world.barn.animals,
+              orchard: world.orchard.trees.map((tree) => ({
+                kind: tree.kind,
+                fruit: FRUIT_TREE_DEFINITIONS[tree.kind].fruit,
+                stage: TREE_STAGES[treeStageFromProgress(tree.progress)],
+                progress: tree.progress,
+                readyToPick: isRipeTree(tree),
+              })),
               warehouse: world.warehouse,
               activeTasks: activeTasks.map((task) => taskDisplayLabel(task)),
             },
@@ -675,7 +800,13 @@ function App() {
     } else {
       reply = `${npc.name}看了看农场：“${npc.traits[0]}的我会记住这件事。”`;
     }
-    if (action) issueTask(action, npc.id, { crop: detectCrop(text) || undefined });
+    if (action) {
+      const requestedTree = detectFruitTree(text);
+      issueTask(action, npc.id, {
+        crop: detectCrop(text) || undefined,
+        targetTreeId: requestedTree ? world.orchard.trees.find((tree) => tree.kind === requestedTree)?.id : undefined,
+      });
+    }
     setChatHistory((history) => ({
       ...history,
       [selectedNpc]: [...(history[selectedNpc] || []), { role: "npc", text: reply }],
@@ -689,7 +820,11 @@ function App() {
       next.plots = next.plots.map((plot) =>
         advancePlotGrowth(plot, { hydrationLoss: 6, shouldAdvance: true }),
       );
-      return addEvent(next, "时间推进了 30 分钟，作物状态已更新。");
+      next.orchard = {
+        ...next.orchard,
+        trees: next.orchard.trees.map((tree) => advanceTreeGrowth(tree, 2)),
+      };
+      return addEvent(next, "时间推进了 30 分钟，作物和果树状态已更新。");
     });
   };
 
@@ -704,6 +839,7 @@ function App() {
           {[
             ["field", "🌱", "实时土地"],
             ["barn", "🐄", "实时牧场"],
+            ["orchard", "🍑", "果树园区"],
             ["warehouse", "📦", "中央仓库"],
             ["residents", "👥", "居民与指令"],
             ["tasks", "✓", "任务进度"],
@@ -718,7 +854,7 @@ function App() {
 
       <main className="game-main">
         <header className="game-topbar">
-          <div><p>春季 · 第 {world.day} 天</p><h1>{{ field: "实时土地", barn: "实时牧场", warehouse: "中央仓库", residents: "居民与指令", tasks: "任务进度" }[activeView]}</h1></div>
+          <div><p>春季 · 第 {world.day} 天</p><h1>{{ field: "实时土地", barn: "实时牧场", orchard: "果树园区", warehouse: "中央仓库", residents: "居民与指令", tasks: "任务进度" }[activeView]}</h1></div>
           <div className="world-clock"><span>☀ {world.weather}</span><strong>{formatTime(world.time)}</strong><button onClick={advanceThirtyMinutes}>＋30 分钟</button></div>
         </header>
 
@@ -726,6 +862,7 @@ function App() {
           <article><span>🌾</span><div><b>{plantedCount}/20</b><small>已种地块</small></div></article>
           <article><span>🧺</span><div><b>{matureCount}</b><small>成熟待收</small></div></article>
           <article><span>🐾</span><div><b>{world.barn.animals.length}</b><small>牧场动物</small></div></article>
+          <article><span>🍎</span><div><b>{ripeFruitCount}</b><small>果园待采</small></div></article>
           <article><span>📦</span><div><b>{Object.values(world.warehouse).reduce((sum, value) => sum + value, 0)}</b><small>仓库物资</small></div></article>
           <article><span>⚙</span><div><b>{activeTasks.length}</b><small>正在执行</small></div></article>
         </section>
@@ -856,6 +993,78 @@ function App() {
           </section>
         )}
 
+        {activeView === "orchard" && (
+          <section className="world-panel orchard-panel">
+            <div className="panel-title"><div><p>ORCHARD 01 · 春风果园</p><h2>五类果树花期与采摘状态</h2></div><div className="quick-actions">
+              <button onClick={() => issueTask("pickFruit")}>🧺 采摘成熟水果 {ripeFruitCount}</button>
+            </div></div>
+            <div className="fruit-tree-catalog" aria-label="果树从开花到结果的成长图鉴">
+              {Object.entries(FRUIT_TREE_DEFINITIONS).map(([kind, definition]) => (
+                <article key={kind}>
+                  <header><span>{definition.icon}</span><b>{kind}</b><small>成熟产出{definition.fruit}</small></header>
+                  <div className="fruit-growth-stages">
+                    {TREE_STAGES.map((stageName, stage) => (
+                      <figure key={stageName}>
+                        <img src={treeStageImage(kind, stage)} alt={`${kind}${stageName}`} />
+                        <figcaption>{stageName}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="orchard-scene">
+              <div className="orchard-live-badge"><i />果树随农场时间生长 · 成熟后保持待采</div>
+              {world.orchard.trees.map((tree, treeIndex) => {
+                const definition = FRUIT_TREE_DEFINITIONS[tree.kind];
+                const stage = treeStageFromProgress(tree.progress);
+                const position = ORCHARD_POSITIONS[treeIndex];
+                const hasTask = world.tasks.some((task) => task.targetTreeId === tree.id && ["queued", "working"].includes(task.status));
+                return (
+                  <article
+                    key={tree.id}
+                    className={`orchard-tree stage-${stage} ${isRipeTree(tree) ? "ripe" : ""}`}
+                    style={{
+                      "--tree-left": `${position.left}%`,
+                      "--tree-top": `${position.top}%`,
+                      "--tree-width": `${position.width}%`,
+                      zIndex: 10 + treeIndex,
+                    }}
+                  >
+                    <div className="orchard-tree-art">
+                      <img key={`${tree.id}-${stage}`} src={treeStageImage(tree.kind, stage)} alt={`${tree.kind}，${TREE_STAGES[stage]}`} />
+                      {isRipeTree(tree) && <i aria-hidden="true">{definition.icon}</i>}
+                    </div>
+                    <div className="orchard-tree-card">
+                      <b>{tree.kind} · {TREE_STAGES[stage]}</b>
+                      <small>{isRipeTree(tree) ? `可采 ${tree.yield} 份${definition.fruit}` : `生长进度 ${tree.progress}%`}</small>
+                      <div className="tree-growth-meter"><i style={{ width: `${tree.progress}%` }} /></div>
+                      <button type="button" disabled={!isRipeTree(tree) || hasTask} onClick={() => issueTask("pickFruit", null, { targetTreeId: tree.id })}>
+                        {hasTask ? "正在采摘" : isRipeTree(tree) ? `采摘${definition.fruit}` : `等待${TREE_STAGES[Math.min(3, stage + 1)]}`}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+              {activeTasks.filter((task) => ORCHARD_ACTIONS.has(task.type)).map((task) => {
+                const worker = residents.find((person) => person.id === task.assignee);
+                return (
+                  <div className="orchard-task-worker" key={task.id} style={orchardWorkerPosition(task, world.orchard.trees)}>
+                    <div className="orchard-task-worker-art" aria-hidden="true">
+                      {[0, 1, 2, 3].map((frame) => (
+                        <img key={frame} src={`/assets/farm/orchard-worker-pick-frame-stage-${frame}-pixel-v1.webp`} alt="" style={{ "--frame-index": frame }} />
+                      ))}
+                    </div>
+                    <div className="orchard-task-worker-status"><b>{worker.name}</b><small>{taskDisplayLabel(task)} · {task.progress}%</small></div>
+                    <span className="fruit-pick-particle" aria-hidden="true">{FRUIT_TREE_DEFINITIONS[world.orchard.trees.find((tree) => tree.id === task.targetTreeId)?.kind]?.icon}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="scene-footer"><span>成熟果树 {ripeTrees.length}/5 棵</span><span>本轮待采 {ripeFruitCount} 份</span><span>累计采摘 {world.stats.fruitPicked} 份 · 完成后自动入库</span></div>
+          </section>
+        )}
+
         {activeView === "barn" && (
           <section className="world-panel">
             <div className="panel-title"><div><p>BARN 01 · 月光牧场</p><h2>动物成长与牧场产出</h2></div><div className="quick-actions">
@@ -956,12 +1165,13 @@ function App() {
               {Object.entries(world.warehouse).map(([item, count]) => {
                 const cropDefinition = CROP_DEFINITIONS[item];
                 const seedCrop = Object.entries(CROP_DEFINITIONS).find(([, definition]) => definition.seed === item);
-                const icon = cropDefinition?.icon || (seedCrop ? "🌰" : { 饲料: "🌾", 牛奶: "🥛", 鸡蛋: "🥚", 鸭蛋: "🥚", 鹅蛋: "🥚" }[item]) || "📦";
+                const fruitDefinition = Object.values(FRUIT_TREE_DEFINITIONS).find((definition) => definition.fruit === item);
+                const icon = cropDefinition?.icon || fruitDefinition?.icon || (seedCrop ? "🌰" : { 饲料: "🌾", 牛奶: "🥛", 鸡蛋: "🥚", 鸭蛋: "🥚", 鹅蛋: "🥚" }[item]) || "📦";
                 const unit = cropDefinition?.unit || (item === "牛奶" ? "瓶" : "份");
                 return <article key={item}><span>{icon}</span><div><strong>{item}</strong><b>{count}</b><small>{unit}</small></div></article>;
               })}
             </div>
-            <div className="ledger"><h3>最新收货记录</h3>{world.events.filter((event) => /入库|仓库|收获|牛奶|鸡蛋|鸭蛋|鹅蛋/.test(event.text)).slice(0, 8).map((event) => <p key={event.id}><time>{event.time}</time>{event.text}</p>)}</div>
+            <div className="ledger"><h3>最新收货记录</h3>{world.events.filter((event) => /入库|仓库|收获|采摘|牛奶|鸡蛋|鸭蛋|鹅蛋|苹果|梨|桃子|香蕉|樱桃/.test(event.text)).slice(0, 8).map((event) => <p key={event.id}><time>{event.time}</time>{event.text}</p>)}</div>
           </section>
         )}
 
@@ -982,7 +1192,7 @@ function App() {
             <div className="panel-title"><div><p>OPERATIONS</p><h2>执行队列与事件流</h2></div><span>{activeTasks.length} 执行中 · {queuedTasks.length} 排队</span></div>
             <div className="operations-layout">
               <div className="task-stream">
-                {world.tasks.length === 0 && <div className="empty-state">还没有任务，可以从土地、牧场或居民对话中下达指令。</div>}
+                {world.tasks.length === 0 && <div className="empty-state">还没有任务，可以从土地、牧场、果园或居民对话中下达指令。</div>}
                 {world.tasks.slice(0, 15).map((task) => {
                   const worker = residents.find((person) => person.id === task.assignee);
                   return <article key={task.id} className={`operation ${task.status}`}><span>{taskDefinitions[task.type].icon}</span><div><h3>{taskDisplayLabel(task)}</h3><p>{worker.name} · {task.status === "working" ? "正在执行" : task.status === "queued" ? "等待前序任务" : task.status === "cancelled" ? "旧任务已取消" : "已完成"}</p><div className="progress"><i style={{ width: `${task.progress}%` }} /></div></div><b>{task.progress}%</b></article>;
@@ -1071,12 +1281,12 @@ function App() {
             <button className="modal-close" onClick={() => setSelectedNpc(null)}>×</button>
             <header><ResidentAvatar person={selectedPerson} /><div><h2>{selectedPerson.name}</h2><p>{selectedPerson.roleName} · {workerStatus(selectedPerson.id)}</p></div></header>
             <div className="chat-messages">
-              {chat.length === 0 && <div className="chat-welcome">和{selectedPerson.name}聊聊，或者直接说“去浇水”“播种番茄”“带动物放牧”。</div>}
+              {chat.length === 0 && <div className="chat-welcome">和{selectedPerson.name}聊聊，或者直接说“去浇水”“采摘苹果”“带动物放牧”。</div>}
               {chat.map((item, index) => <div className={`chat-bubble ${item.role}`} key={`${item.role}-${index}`}>{item.text}</div>)}
               {isReplying && <div className="chat-bubble npc typing"><i /><i /><i /><span>{selectedPerson.name}正在结合记忆思考…</span></div>}
             </div>
             <form className="chat-input" onSubmit={sendMessage}><input value={message} disabled={isReplying} onChange={(event) => setMessage(event.target.value)} placeholder={isReplying ? "正在生成回复…" : "输入对话或工作指令…"} /><button disabled={isReplying || !message.trim()}>{isReplying ? "生成中" : "发送"}</button></form>
-            <div className="suggestions">{["去给最干的田地浇水", "播种胡萝卜", "收割一块成熟作物", "带动物去放牧"].map((text) => <button key={text} onClick={() => setMessage(text)}>{text}</button>)}</div>
+            <div className="suggestions">{["去给最干的田地浇水", "采摘成熟苹果", "收割一块成熟作物", "带动物去放牧"].map((text) => <button key={text} onClick={() => setMessage(text)}>{text}</button>)}</div>
           </div>
         </div>
       )}

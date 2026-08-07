@@ -1,0 +1,306 @@
+.live-summary {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.fruit-tree-catalog {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(148px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+
+.fruit-tree-catalog > article {
+  min-width: 148px;
+  padding: 8px;
+  border: 1px solid #dbe6d8;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fffdf7, #f1f7ea);
+}
+
+.fruit-tree-catalog header {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  align-items: center;
+  column-gap: 5px;
+}
+
+.fruit-tree-catalog header > span {
+  grid-row: 1 / 3;
+  font-size: 19px;
+}
+
+.fruit-tree-catalog header b,
+.fruit-tree-catalog header small {
+  display: block;
+}
+
+.fruit-tree-catalog header b {
+  color: #2d5342;
+  font-size: 10px;
+}
+
+.fruit-tree-catalog header small {
+  color: #758579;
+  font-size: 7px;
+}
+
+.fruit-growth-stages {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.fruit-growth-stages figure {
+  min-width: 0;
+  margin: 0;
+  text-align: center;
+}
+
+.fruit-growth-stages img {
+  display: block;
+  width: 100%;
+  height: 52px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(50, 72, 41, 0.18));
+}
+
+.fruit-growth-stages figcaption {
+  margin-top: 1px;
+  color: #5f7668;
+  font-size: 6px;
+}
+
+.orchard-scene {
+  position: relative;
+  min-height: 560px;
+  overflow: hidden;
+  border: 1px solid #9fbd82;
+  border-radius: 14px;
+  background: url("/assets/farm/orchard-anime-v1.webp") center / cover no-repeat;
+}
+
+.orchard-live-badge {
+  position: absolute;
+  z-index: 50;
+  top: 14px;
+  left: 14px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 99px;
+  background: rgba(255, 253, 246, 0.9);
+  color: #486355;
+  font-size: 9px;
+  box-shadow: 0 4px 14px rgba(43, 70, 35, 0.12);
+  backdrop-filter: blur(5px);
+}
+
+.orchard-live-badge i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #8dc63f;
+  box-shadow: 0 0 7px #9dd952;
+}
+
+.orchard-tree {
+  position: absolute;
+  left: var(--tree-left);
+  top: var(--tree-top);
+  width: var(--tree-width);
+  pointer-events: none;
+  transform: translate(-50%, -82%);
+}
+
+.orchard-tree-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  animation: orchard-tree-sway 3.8s ease-in-out infinite;
+  transform-origin: 50% 88%;
+}
+
+.orchard-tree:nth-of-type(even) .orchard-tree-art {
+  animation-delay: -1.4s;
+}
+
+.orchard-tree-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 4px rgba(53, 74, 34, 0.28));
+  animation: orchard-stage-pop 0.7s cubic-bezier(0.2, 1.35, 0.4, 1) both;
+}
+
+.orchard-tree-art > i {
+  position: absolute;
+  top: 8%;
+  right: 8%;
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #dff08c;
+  font-style: normal;
+  box-shadow: 0 4px 11px rgba(65, 83, 35, 0.25);
+  animation: ripe-fruit-pulse 1.2s ease-in-out infinite;
+}
+
+.orchard-tree-card {
+  position: absolute;
+  top: calc(100% - 17px);
+  left: 50%;
+  min-width: 122px;
+  padding: 6px 8px;
+  pointer-events: auto;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 9px;
+  background: rgba(255, 253, 246, 0.94);
+  box-shadow: 0 5px 13px rgba(43, 66, 33, 0.18);
+  transform: translateX(-50%);
+  backdrop-filter: blur(5px);
+}
+
+.orchard-tree-card b,
+.orchard-tree-card small {
+  display: block;
+  white-space: nowrap;
+}
+
+.orchard-tree-card b {
+  color: #254b3a;
+  font-size: 8px;
+}
+
+.orchard-tree-card small {
+  margin-top: 2px;
+  color: #6c7c70;
+  font-size: 6px;
+}
+
+.tree-growth-meter {
+  height: 3px;
+  margin: 5px 0;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #dfe7da;
+}
+
+.tree-growth-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8dc74a, #d3e75b);
+}
+
+.orchard-tree-card button {
+  width: 100%;
+  border: 0;
+  border-radius: 5px;
+  padding: 4px 5px;
+  background: #2f684f;
+  color: #fff;
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.orchard-tree-card button:disabled {
+  background: #dce5d9;
+  color: #7d8b80;
+}
+
+.orchard-task-worker {
+  position: absolute;
+  left: var(--orchard-worker-x);
+  top: var(--orchard-worker-y);
+  width: var(--orchard-worker-width);
+  pointer-events: none;
+  transform: translate(-50%, -87%);
+}
+
+.orchard-task-worker-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  filter: drop-shadow(0 3px 2px rgba(43, 67, 41, 0.3));
+}
+
+.orchard-task-worker-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  opacity: 0;
+  animation: field-worker-frame-cycle 1.16s step-end infinite;
+  animation-delay: calc(var(--frame-index) * 0.29s);
+}
+
+.orchard-task-worker-status {
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  min-width: max-content;
+  padding: 4px 7px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 8px;
+  background: rgba(255, 253, 246, 0.95);
+  box-shadow: 0 4px 12px rgba(47, 70, 36, 0.18);
+  transform: translateX(-50%);
+}
+
+.orchard-task-worker-status b,
+.orchard-task-worker-status small {
+  display: block;
+  white-space: nowrap;
+}
+
+.orchard-task-worker-status b { font-size: 8px; }
+.orchard-task-worker-status small { margin-top: 2px; color: #687b6e; font-size: 6px; }
+
+.fruit-pick-particle {
+  position: absolute;
+  top: 18%;
+  right: -8%;
+  font-size: 18px;
+  animation: fruit-drop 1.16s ease-in infinite;
+}
+
+@keyframes orchard-tree-sway {
+  0%, 100% { transform: rotate(-0.7deg); }
+  50% { transform: rotate(0.9deg); }
+}
+
+@keyframes orchard-stage-pop {
+  from { opacity: 0.45; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ripe-fruit-pulse {
+  50% { transform: translateY(-3px) scale(1.08); }
+}
+
+@keyframes fruit-drop {
+  0% { opacity: 0; transform: translateY(-10px) scale(0.8); }
+  30% { opacity: 1; }
+  80%, 100% { opacity: 0; transform: translateY(36px) scale(1); }
+}
+
+@media (max-width: 1100px) {
+  .live-summary { grid-template-columns: repeat(3, 1fr); }
+  .orchard-scene { min-height: 500px; }
+}
+
+@media (max-width: 760px) {
+  .live-summary { grid-template-columns: repeat(2, 1fr); }
+  .orchard-scene { min-width: 720px; min-height: 405px; }
+  .orchard-panel { overflow-x: auto; }
+}
