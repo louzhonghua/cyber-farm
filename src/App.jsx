@@ -6,7 +6,16 @@ import "./farm-animations.css";
 import "./icon-fix.css";
 import "./anime-world.css";
 import "./plot-actions.css";
+import "./barn-v2.css";
 import { advancePlotGrowth, canHarvestPlot, canWaterPlot, clampCropStage } from "./farm-rules.js";
+import {
+  ANIMAL_DEFINITIONS,
+  ANIMAL_STAGES,
+  advanceAnimalGrowth,
+  animalStageFromAge,
+  canCollectAnimal,
+  replenishDailyProduce,
+} from "./barn-rules.js";
 
 const CROP_STAGES = ["破土", "幼苗", "生长期", "半成熟", "成熟"];
 const CROP_DEFINITIONS = {
@@ -19,7 +28,8 @@ const CROP_DEFINITIONS = {
 const cropStageImage = (crop, stage) =>
   `/assets/farm/${CROP_DEFINITIONS[crop]?.id || "tomato"}-stage-${Math.min(4, Math.max(0, stage))}-v1.webp`;
 const FIELD_ACTIONS = new Set(["sow", "water", "harvest"]);
-const BARN_ACTIONS = new Set(["feed", "graze", "milk"]);
+const BARN_ACTIONS = new Set(["feed", "graze", "collectEggs", "collectMilk", "playDog"]);
+const BARN_TARGET_ACTIONS = new Set(["collectEggs", "collectMilk", "playDog"]);
 
 const PLOT_LAYOUT = [
   { x: 26.3, y: 30.91, w: 11.6, h: 9.35 },
@@ -65,30 +75,56 @@ const fieldWorkerPosition = (plotId, action) => {
   };
 };
 
-const ANIMAL_IMAGES = {
-  奶牛: "/assets/farm/animal-cow-v1.webp",
-  绵羊: "/assets/farm/animal-sheep-v1.webp",
-  山羊: "/assets/farm/animal-goat-v1.webp",
-  母鸡: "/assets/farm/animal-chicken-v1.webp",
-};
+const animalStageImage = (kind, stage) =>
+  `/assets/farm/animal-${ANIMAL_DEFINITIONS[kind]?.id || "chicken"}-stage-${stage}-v2.webp`;
 
 const BARN_POSITIONS = {
-  idle: [[31, 34], [47, 43], [59, 28], [70, 48], [43, 66], [74, 69]],
-  feed: [[58, 24], [66, 25], [73, 31], [78, 37], [62, 37], [82, 27]],
-  graze: [[27, 43], [48, 28], [68, 43], [36, 67], [60, 65], [79, 58]],
-  milk: [[20, 68], [28, 65], [57, 36], [69, 48], [48, 67], [76, 66]],
+  idle: [[27, 35], [41, 47], [56, 32], [72, 43], [42, 67], [72, 68]],
+  feed: [[31, 39], [45, 50], [60, 36], [74, 47], [46, 68], [74, 69]],
+  graze: [[24, 47], [43, 31], [61, 45], [76, 34], [42, 67], [72, 66]],
 };
 
-const animalVisualState = (animal, index, barnMode) => {
-  const mode = barnMode === "milk" && animal.kind !== "奶牛" ? "idle" : barnMode;
-  const [left, top] = BARN_POSITIONS[mode][index];
+const animalVisualState = (animal, index, barnMode, activeTasks = []) => {
+  const targetedTask = activeTasks.find((task) => task.targetAnimalId === animal.id && BARN_TARGET_ACTIONS.has(task.type));
+  const mode = targetedTask?.type || (BARN_POSITIONS[barnMode] ? barnMode : "idle");
+  const positionMode = targetedTask ? "idle" : BARN_POSITIONS[barnMode] ? barnMode : "idle";
+  const [left, top] = BARN_POSITIONS[positionMode][index];
+  const stage = animalStageFromAge(animal.age);
+  const definition = ANIMAL_DEFINITIONS[animal.kind];
   const labels = {
-    idle: animal.hunger > 65 ? "寻找饲料" : "悠闲休息",
+    idle: stage < 2 ? `${ANIMAL_STAGES[stage]} · 成长 ${animal.age}%` : animal.ready > 0 && definition.product ? `${animal.ready} 份${definition.product}待收` : animal.hunger > 65 ? "寻找饲料" : "悠闲休息",
     feed: "正在进食",
     graze: "边走边吃草",
-    milk: "正在挤奶",
+    collectEggs: "正在配合收蛋",
+    collectMilk: "正在配合采奶",
+    playDog: "正在开心玩耍",
   };
-  return { mode, left, top, label: labels[mode] };
+  const marks = {
+    idle: animal.ready > 0 && definition.product ? definition.product.includes("蛋") ? "🥚" : "🥛" : "♪",
+    feed: "🌾",
+    graze: "🌿",
+    collectEggs: "🥚",
+    collectMilk: "🥛",
+    playDog: "🎾",
+  };
+  return { mode, left, top, stage, label: labels[mode], mark: marks[mode] };
+};
+
+const barnWorkerPosition = (task, animals) => {
+  const animalIndex = Math.max(0, animals.findIndex((animal) => animal.id === task.targetAnimalId));
+  const [left, top] = BARN_POSITIONS.idle[animalIndex];
+  const offsets = {
+    collectEggs: [6, 5],
+    collectMilk: [-8, 6],
+    playDog: [-8, 2],
+  };
+  const [offsetX, offsetY] = offsets[task.type] || [6, 4];
+  return {
+    "--barn-worker-x": `${left + offsetX}%`,
+    "--barn-worker-y": `${top + offsetY}%`,
+    "--barn-worker-width": `${task.type === "collectMilk" ? 8.4 : 7.5}%`,
+    zIndex: 18 + animalIndex,
+  };
 };
 
 const taskDefinitions = {
@@ -97,7 +133,9 @@ const taskDefinitions = {
   harvest: { label: "收获成熟作物", role: "farmer", place: "field", icon: "🧺", duration: 120 },
   feed: { label: "给牲畜喂食", role: "rancher", place: "barn", icon: "🌾", duration: 90 },
   graze: { label: "带牲畜去放牧", role: "rancher", place: "barn", icon: "🐾", duration: 115 },
-  milk: { label: "收集今日牛奶", role: "rancher", place: "barn", icon: "🥛", duration: 95 },
+  collectEggs: { label: "收集禽蛋", role: "rancher", place: "barn", icon: "🥚", duration: 90 },
+  collectMilk: { label: "采集牛羊奶", role: "rancher", place: "barn", icon: "🥛", duration: 105 },
+  playDog: { label: "陪牧场犬玩耍", role: "rancher", place: "barn", icon: "🎾", duration: 80 },
 };
 
 const aiProviders = {
@@ -170,7 +208,18 @@ const DEFAULT_WAREHOUSE = {
   饲料: 52,
   牛奶: 6,
   鸡蛋: 9,
+  鸭蛋: 3,
+  鹅蛋: 2,
 };
+
+const DEFAULT_ANIMALS = [
+  { id: "chicken-1", name: "豆豆", kind: "鸡", hunger: 45, mood: 76, age: 100, ready: 2 },
+  { id: "duck-1", name: "嘎嘎", kind: "鸭", hunger: 38, mood: 82, age: 76, ready: 1 },
+  { id: "goose-1", name: "白羽", kind: "鹅", hunger: 32, mood: 74, age: 48, ready: 0 },
+  { id: "dog-1", name: "阿福", kind: "狗", hunger: 28, mood: 88, age: 32, ready: 0 },
+  { id: "cow-1", name: "奶糖", kind: "牛", hunger: 36, mood: 78, age: 100, ready: 2 },
+  { id: "sheep-1", name: "云朵", kind: "羊", hunger: 30, mood: 84, age: 72, ready: 1 },
+];
 
 const defaultWorld = {
   day: 12,
@@ -178,16 +227,8 @@ const defaultWorld = {
   weather: "晴朗",
   plots: makePlots(),
   barn: {
-    animals: [
-      { id: "cow-1", name: "奶糖", kind: "奶牛", icon: "🐄", hunger: 36, mood: 78 },
-      { id: "cow-2", name: "栗子", kind: "奶牛", icon: "🐄", hunger: 42, mood: 72 },
-      { id: "sheep-1", name: "云朵", kind: "绵羊", icon: "🐑", hunger: 28, mood: 86 },
-      { id: "sheep-2", name: "棉花", kind: "绵羊", icon: "🐑", hunger: 34, mood: 80 },
-      { id: "goat-1", name: "山竹", kind: "山羊", icon: "🐐", hunger: 31, mood: 75 },
-      { id: "chicken-1", name: "豆豆", kind: "母鸡", icon: "🐔", hunger: 45, mood: 70 },
-    ],
+    animals: DEFAULT_ANIMALS,
     grazing: false,
-    milkReady: 2,
   },
   warehouse: DEFAULT_WAREHOUSE,
   tasks: [],
@@ -196,7 +237,7 @@ const defaultWorld = {
     { person: "知远", text: "玩家很在意牲畜的健康和放牧安全。", time: "春 11 日" },
   ],
   events: [{ id: 1, text: "晨雾谷农场开始了新的一天。", time: "09:20" }],
-  stats: { harvested: 0, planted: 0, milked: 0 },
+  stats: { harvested: 0, planted: 0, milked: 0, eggs: 0, played: 0 },
 };
 
 const loadJson = (key, fallback) => {
@@ -208,6 +249,19 @@ const loadJson = (key, fallback) => {
     return fallback;
   }
 };
+
+const normalizeBarnAnimals = (storedAnimals = []) =>
+  DEFAULT_ANIMALS.map((fallbackAnimal) => {
+    const saved = storedAnimals.find((animal) => animal.id === fallbackAnimal.id);
+    return {
+      ...fallbackAnimal,
+      name: saved?.name || fallbackAnimal.name,
+      hunger: Math.min(100, Math.max(0, Number(saved?.hunger ?? fallbackAnimal.hunger))),
+      mood: Math.min(100, Math.max(0, Number(saved?.mood ?? fallbackAnimal.mood))),
+      age: Math.min(100, Math.max(0, Number(saved?.age ?? fallbackAnimal.age))),
+      ready: Math.min(3, Math.max(0, Number(saved?.ready ?? fallbackAnimal.ready))),
+    };
+  });
 
 const normalizeWorldState = (stored) => ({
   ...defaultWorld,
@@ -225,12 +279,20 @@ const normalizeWorldState = (stored) => ({
     };
   }),
   warehouse: { ...DEFAULT_WAREHOUSE, ...(stored?.warehouse || {}) },
-  tasks: (stored?.tasks || []).map((task) =>
-    task.type === "sow" && !task.targetPlotId && ["queued", "working"].includes(task.status)
-      ? { ...task, status: "cancelled", progress: 0 }
-      : task,
-  ),
-  barn: { ...defaultWorld.barn, ...(stored?.barn || {}) },
+  tasks: (stored?.tasks || []).map((task) => {
+    if (task.type === "sow" && !task.targetPlotId && ["queued", "working"].includes(task.status)) {
+      return { ...task, status: "cancelled", progress: 0 };
+    }
+    if (task.type === "milk") {
+      return { ...task, type: "collectMilk", targetAnimalId: task.targetAnimalId || "cow-1", targetAnimalName: task.targetAnimalName || "奶糖", productName: "牛奶" };
+    }
+    return task;
+  }),
+  barn: {
+    ...defaultWorld.barn,
+    ...(stored?.barn || {}),
+    animals: normalizeBarnAnimals(stored?.barn?.animals),
+  },
   stats: { ...defaultWorld.stats, ...(stored?.stats || {}) },
 });
 
@@ -243,6 +305,9 @@ const taskDisplayLabel = (task) => {
   if (task.type === "sow") return `在 ${task.targetPlotId || "?"} 号地播种${task.crop || "番茄"}`;
   if (task.type === "water") return `给 ${task.targetPlotId || "目标"} 号地浇水`;
   if (task.type === "harvest") return `收割 ${task.targetPlotId || "目标"} 号地`;
+  if (task.type === "collectEggs") return `收集${task.targetAnimalName || "家禽"}的${task.productName || "禽蛋"}`;
+  if (task.type === "collectMilk") return `采集${task.targetAnimalName || "牛羊"}的牛奶`;
+  if (task.type === "playDog") return `陪${task.targetAnimalName || "牧场犬"}玩耍`;
   return taskDefinitions[task.type]?.label || "农场任务";
 };
 
@@ -355,12 +420,45 @@ function App() {
       };
       next = addEvent(next, `${worker.name}已把牲畜带到东侧草场。`);
     }
-    if (task.type === "milk") {
-      const amount = next.barn.milkReady;
-      next.barn = { ...next.barn, milkReady: 0 };
-      next.warehouse = { ...next.warehouse, 牛奶: (next.warehouse.牛奶 || 0) + amount };
-      next.stats = { ...next.stats, milked: next.stats.milked + amount };
-      next = addEvent(next, `${worker.name}收集 ${amount} 瓶牛奶，已送到中央仓库。`);
+    if (task.type === "collectEggs" || task.type === "collectMilk") {
+      const target = next.barn.animals.find((animal) => animal.id === task.targetAnimalId);
+      const definition = ANIMAL_DEFINITIONS[target?.kind];
+      const canCollect = target && canCollectAnimal(target, task.type);
+      const amount = canCollect ? target.ready : 0;
+      const product = definition?.product || task.productName || (task.type === "collectEggs" ? "禽蛋" : "牛奶");
+      next.barn = {
+        ...next.barn,
+        animals: next.barn.animals.map((animal) =>
+          animal.id === task.targetAnimalId && canCollect ? { ...animal, ready: 0, mood: Math.min(100, animal.mood + 5) } : animal,
+        ),
+      };
+      if (amount > 0) {
+        next.warehouse = { ...next.warehouse, [product]: (next.warehouse[product] || 0) + amount };
+        next.stats = {
+          ...next.stats,
+          milked: next.stats.milked + (task.type === "collectMilk" ? amount : 0),
+          eggs: next.stats.eggs + (task.type === "collectEggs" ? amount : 0),
+        };
+      }
+      next = addEvent(
+        next,
+        amount > 0
+          ? `${worker.name}从${target.name}处收集 ${amount} 份${product}，已送到中央仓库。`
+          : `${target?.name || "目标动物"}目前没有可以采集的产物。`,
+      );
+    }
+    if (task.type === "playDog") {
+      let playedWith = null;
+      next.barn = {
+        ...next.barn,
+        animals: next.barn.animals.map((animal) => {
+          if (animal.id !== task.targetAnimalId || animal.kind !== "狗") return animal;
+          playedWith = animal;
+          return { ...animal, mood: Math.min(100, animal.mood + 28), hunger: Math.min(100, animal.hunger + 4) };
+        }),
+      };
+      next.stats = { ...next.stats, played: next.stats.played + (playedWith ? 1 : 0) };
+      next = addEvent(next, playedWith ? `${worker.name}陪${playedWith.name}玩了接球，心情明显变好了。` : "没有找到要互动的牧场犬。");
     }
     return next;
   };
@@ -374,7 +472,11 @@ function App() {
             ...next,
             day: next.day + 1,
             time: next.time - 1440,
-            barn: { ...next.barn, grazing: false, milkReady: 2 },
+            barn: {
+              ...next.barn,
+              grazing: false,
+              animals: replenishDailyProduce(next.barn.animals),
+            },
           };
           next = addEvent(next, `春季第 ${next.day} 天开始，牲畜回到畜舍。`);
         }
@@ -406,7 +508,10 @@ function App() {
           );
           next.barn = {
             ...next.barn,
-            animals: next.barn.animals.map((animal) => ({ ...animal, hunger: Math.min(100, animal.hunger + 2) })),
+            animals: next.barn.animals.map((animal) => ({
+              ...advanceAnimalGrowth(animal, 1),
+              hunger: Math.min(100, animal.hunger + 2),
+            })),
           };
         }
         return next;
@@ -419,6 +524,12 @@ function App() {
   const queuedTasks = world.tasks.filter((task) => task.status === "queued");
   const activeBarnTask = activeTasks.find((task) => BARN_ACTIONS.has(task.type));
   const barnMode = activeBarnTask?.type || (world.barn.grazing ? "graze" : "idle");
+  const readyEggs = world.barn.animals.reduce((sum, animal) => {
+    const product = ANIMAL_DEFINITIONS[animal.kind]?.product;
+    return sum + (product?.includes("蛋") ? animal.ready : 0);
+  }, 0);
+  const readyMilk = world.barn.animals.reduce((sum, animal) =>
+    sum + (ANIMAL_DEFINITIONS[animal.kind]?.product === "牛奶" ? animal.ready : 0), 0);
   const matureCount = world.plots.filter((plot) => canHarvestPlot(plot)).length;
   const plantedCount = world.plots.filter((plot) => plot.crop).length;
   const cropCycleProgress = (world.time % 120) / 120;
@@ -443,6 +554,15 @@ function App() {
       if (type === "harvest") targetPlotId = world.plots.find((plot) => canHarvestPlot(plot))?.id || null;
     }
     const targetPlot = targetPlotId ? world.plots.find((plot) => plot.id === targetPlotId) : null;
+    let targetAnimalId = options.targetAnimalId || null;
+    if (BARN_TARGET_ACTIONS.has(type) && !targetAnimalId) {
+      if (type === "playDog") {
+        targetAnimalId = world.barn.animals.find((animal) => animal.kind === "狗")?.id || null;
+      } else {
+        targetAnimalId = world.barn.animals.find((animal) => canCollectAnimal(animal, type))?.id || null;
+      }
+    }
+    const targetAnimal = targetAnimalId ? world.barn.animals.find((animal) => animal.id === targetAnimalId) : null;
     const crop = CROP_DEFINITIONS[options.crop] ? options.crop : catalogCrop;
     const candidates = residents.filter((person) => person.role === definition.role);
     const worker =
@@ -459,7 +579,16 @@ function App() {
     if (type === "harvest" && !targetPlot) return setNotice("目前没有成熟作物可以收割。");
     if (type === "harvest" && !canHarvestPlot(targetPlot)) return setNotice(`${targetPlot.id} 号地尚未成熟。`);
     if (type === "feed" && !world.warehouse.饲料) return setNotice("中央仓库没有饲料。");
-    if (type === "milk" && world.barn.milkReady === 0) return setNotice("今天的牛奶已经收集完了。");
+    if (type === "collectEggs" && !targetAnimal) return setNotice("目前没有成年家禽留下可收集的蛋。");
+    if (type === "collectMilk" && !targetAnimal) return setNotice("目前没有成年牛羊留下可收集的牛奶。");
+    if (type === "playDog" && !targetAnimal) return setNotice("牧场里暂时没有狗可以互动。");
+    if ((type === "collectEggs" || type === "collectMilk") && !canCollectAnimal(targetAnimal, type)) {
+      return setNotice(`${targetAnimal.name}还没有可采集的产物，或尚未成年。`);
+    }
+    if (BARN_TARGET_ACTIONS.has(type) && world.tasks.some((task) =>
+      task.targetAnimalId === targetAnimalId && ["queued", "working"].includes(task.status))) {
+      return setNotice(`${targetAnimal.name}身边已经有牧民在执行任务。`);
+    }
     const busy = world.tasks.some((task) => task.assignee === worker.id && ["queued", "working"].includes(task.status));
     const task = {
       id: Date.now() + Math.random(),
@@ -469,12 +598,15 @@ function App() {
       progress: 0,
       createdAt: world.time,
       targetPlotId: FIELD_ACTIONS.has(type) ? targetPlotId : null,
+      targetAnimalId: BARN_TARGET_ACTIONS.has(type) ? targetAnimalId : null,
+      targetAnimalName: BARN_TARGET_ACTIONS.has(type) ? targetAnimal?.name : null,
+      productName: BARN_TARGET_ACTIONS.has(type) ? ANIMAL_DEFINITIONS[targetAnimal?.kind]?.product : null,
       crop: type === "sow" ? crop : targetPlot?.crop || null,
     };
     setWorld((current) => addEvent({ ...current, tasks: [task, ...current.tasks].slice(0, 40) }, `已安排${worker.name}${taskDisplayLabel(task)}。`));
     setActiveView(definition.place);
     setSelectedPlotId(null);
-    setNotice(`${worker.name}已接受任务，前往${definition.place === "field" ? `${targetPlotId} 号地` : "牧场"}。`);
+    setNotice(`${worker.name}已接受任务，前往${definition.place === "field" ? `${targetPlotId} 号地` : targetAnimal ? `${targetAnimal.name}身边` : "牧场"}。`);
   };
 
   const detectCommand = (text) => {
@@ -483,7 +615,9 @@ function App() {
     if (/收获|收割|收菜|摘番茄/.test(text)) return "harvest";
     if (/喂食|喂动物|饲料/.test(text)) return "feed";
     if (/放牧|遛牛|遛羊/.test(text)) return "graze";
-    if (/挤奶|牛奶/.test(text)) return "milk";
+    if (/收蛋|捡蛋|鸡蛋|鸭蛋|鹅蛋/.test(text)) return "collectEggs";
+    if (/挤奶|采奶|牛奶|羊奶/.test(text)) return "collectMilk";
+    if (/陪狗|逗狗|遛狗|和狗玩|玩球/.test(text)) return "playDog";
     return null;
   };
 
@@ -724,44 +858,70 @@ function App() {
 
         {activeView === "barn" && (
           <section className="world-panel">
-            <div className="panel-title"><div><p>BARN 01 · 月光牧场</p><h2>牲畜与放牧实时状态</h2></div><div className="quick-actions">
+            <div className="panel-title"><div><p>BARN 01 · 月光牧场</p><h2>动物成长与牧场产出</h2></div><div className="quick-actions">
               <button onClick={() => issueTask("feed")}>🌾 喂食</button>
               <button onClick={() => issueTask("graze")}>🐾 放牧</button>
-              <button onClick={() => issueTask("milk")}>🥛 挤奶</button>
+              <button onClick={() => issueTask("collectEggs")}>🥚 收蛋 {readyEggs}</button>
+              <button onClick={() => issueTask("collectMilk")}>🥛 收奶 {readyMilk}</button>
+              <button onClick={() => issueTask("playDog")}>🎾 陪狗玩</button>
             </div></div>
+            <div className="animal-growth-catalog" aria-label="动物从幼崽到成年的成长图鉴">
+              {Object.entries(ANIMAL_DEFINITIONS).map(([kind, definition]) => (
+                <article key={kind}>
+                  <header><span>{definition.icon}</span><b>{kind}</b><small>{definition.product ? `成年产出${definition.product}` : "陪伴与互动"}</small></header>
+                  <div className="animal-growth-stages">
+                    {ANIMAL_STAGES.map((stageName, stage) => (
+                      <figure key={stageName}>
+                        <img src={animalStageImage(kind, stage)} alt={`${kind}${stageName}`} />
+                        <figcaption>{stageName}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
             <div className={`barn-scene mode-${barnMode}`}>
               <div className="barn-mode-badge"><i />{{
                 idle: "日常活动",
                 feed: "集中进食",
                 graze: "草场放牧",
-                milk: "奶牛挤奶",
-              }[barnMode]}</div>
+                collectEggs: "正在收集禽蛋",
+                collectMilk: "正在采集牛羊奶",
+                playDog: "正在陪牧场犬玩耍",
+              }[barnMode] || "日常活动"}</div>
               <div className="pasture">
                 {world.barn.animals.map((animal, index) => {
-                  const visual = animalVisualState(animal, index, barnMode);
+                  const visual = animalVisualState(animal, index, barnMode, activeTasks);
+                  const definition = ANIMAL_DEFINITIONS[animal.kind];
+                  const actionLabel = definition.action === "collectEggs" ? `收${definition.product}` : definition.action === "collectMilk" ? "收牛奶" : "陪它玩";
+                  const actionDisabled = definition.product ? !canCollectAnimal(animal, definition.action) : false;
                   return (
                     <div
-                      className={`animal animal-${animal.kind} behavior-${visual.mode}`}
+                      className={`animal animal-${definition.id} behavior-${visual.mode}`}
                       key={animal.id}
                       style={{
                         "--animal-left": `${visual.left}%`,
                         "--animal-top": `${visual.top}%`,
+                        "--animal-width": `${definition.size}%`,
                         "--animal-delay": `${index * -0.65}s`,
+                        zIndex: 5 + Math.round(visual.top / 8),
                       }}
                     >
                       <div className="animal-art">
-                        <img src={ANIMAL_IMAGES[animal.kind]} alt={animal.kind} />
-                        <i className="animal-action-mark" aria-hidden="true" />
+                        <img key={`${animal.id}-${visual.stage}`} src={animalStageImage(animal.kind, visual.stage)} alt={`${animal.kind}${ANIMAL_STAGES[visual.stage]}`} />
+                        <i className="animal-action-mark" aria-hidden="true">{visual.mark}</i>
                       </div>
                       <div className="animal-card">
-                        <b>{animal.name}</b>
+                        <b>{animal.name} · {animal.kind} · {ANIMAL_STAGES[visual.stage]}</b>
                         <span>{visual.label}</span>
                         <small>饥饿 {animal.hunger}% · 心情 {animal.mood}%</small>
+                        <div className="animal-age-meter" aria-label={`成长进度 ${animal.age}%`}><i style={{ width: `${animal.age}%` }} /></div>
+                        <button type="button" disabled={actionDisabled} onClick={() => issueTask(definition.action, null, { targetAnimalId: animal.id })}>{actionLabel}</button>
                       </div>
                     </div>
                   );
                 })}
-                {activeTasks.filter((task) => BARN_ACTIONS.has(task.type)).map((task, index) => {
+                {activeTasks.filter((task) => BARN_ACTIONS.has(task.type) && !BARN_TARGET_ACTIONS.has(task.type)).map((task, index) => {
                   const worker = residents.find((person) => person.id === task.assignee);
                   return <div className={`working-character barn-worker action-${task.type}`} key={task.id} style={{ right: `${8 + index * 20}%`, top: "8%" }}>
                     <div className="work-particle">{taskDefinitions[task.type].icon}</div>
@@ -769,9 +929,23 @@ function App() {
                     <b>{worker.name}</b><small>{taskDisplayLabel(task)} {task.progress}%</small>
                   </div>;
                 })}
+                {activeTasks.filter((task) => BARN_TARGET_ACTIONS.has(task.type)).map((task) => {
+                  const worker = residents.find((person) => person.id === task.assignee);
+                  const actionSlug = { collectEggs: "collect-eggs", collectMilk: "collect-milk", playDog: "play-dog" }[task.type];
+                  return (
+                    <div className={`barn-task-worker action-${task.type}`} key={task.id} style={barnWorkerPosition(task, world.barn.animals)}>
+                      <div className="barn-task-worker-art" aria-hidden="true">
+                        {[0, 1, 2, 3].map((frame) => (
+                          <img key={frame} src={`/assets/farm/barn-worker-${actionSlug}-frame-${frame}-pixel-v2.webp`} alt="" style={{ "--frame-index": frame }} />
+                        ))}
+                      </div>
+                      <div className="barn-task-worker-status"><b>{worker.name}</b><small>{taskDisplayLabel(task)} · {task.progress}%</small></div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-            <div className="scene-footer"><span>{world.barn.grazing ? "牲畜正在东侧草场放牧" : "牲畜位于月光畜舍"}</span><span>可收牛奶 {world.barn.milkReady} 瓶</span><span>平均心情 {Math.round(world.barn.animals.reduce((sum, animal) => sum + animal.mood, 0) / world.barn.animals.length)}%</span></div>
+            <div className="scene-footer"><span>{world.barn.grazing ? "动物正在东侧草场放牧" : "动物位于月光牧场"}</span><span>待收禽蛋 {readyEggs} 份 · 待收牛奶 {readyMilk} 份</span><span>平均心情 {Math.round(world.barn.animals.reduce((sum, animal) => sum + animal.mood, 0) / world.barn.animals.length)}%</span></div>
           </section>
         )}
 
@@ -782,12 +956,12 @@ function App() {
               {Object.entries(world.warehouse).map(([item, count]) => {
                 const cropDefinition = CROP_DEFINITIONS[item];
                 const seedCrop = Object.entries(CROP_DEFINITIONS).find(([, definition]) => definition.seed === item);
-                const icon = cropDefinition?.icon || (seedCrop ? "🌰" : { 饲料: "🌾", 牛奶: "🥛", 鸡蛋: "🥚" }[item]) || "📦";
+                const icon = cropDefinition?.icon || (seedCrop ? "🌰" : { 饲料: "🌾", 牛奶: "🥛", 鸡蛋: "🥚", 鸭蛋: "🥚", 鹅蛋: "🥚" }[item]) || "📦";
                 const unit = cropDefinition?.unit || (item === "牛奶" ? "瓶" : "份");
                 return <article key={item}><span>{icon}</span><div><strong>{item}</strong><b>{count}</b><small>{unit}</small></div></article>;
               })}
             </div>
-            <div className="ledger"><h3>最新收货记录</h3>{world.events.filter((event) => /入库|仓库|收获|牛奶/.test(event.text)).slice(0, 8).map((event) => <p key={event.id}><time>{event.time}</time>{event.text}</p>)}</div>
+            <div className="ledger"><h3>最新收货记录</h3>{world.events.filter((event) => /入库|仓库|收获|牛奶|鸡蛋|鸭蛋|鹅蛋/.test(event.text)).slice(0, 8).map((event) => <p key={event.id}><time>{event.time}</time>{event.text}</p>)}</div>
           </section>
         )}
 

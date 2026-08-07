@@ -1,0 +1,234 @@
+.animal-growth-catalog {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(132px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+
+.animal-growth-catalog > article {
+  min-width: 132px;
+  padding: 8px;
+  border: 1px solid #dbe6d8;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fffdf7, #eef5e8);
+}
+
+.animal-growth-catalog header {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  align-items: center;
+  column-gap: 5px;
+}
+
+.animal-growth-catalog header > span {
+  grid-row: 1 / 3;
+  font-size: 18px;
+}
+
+.animal-growth-catalog header b,
+.animal-growth-catalog header small {
+  display: block;
+}
+
+.animal-growth-catalog header b {
+  color: #2d5342;
+  font-size: 10px;
+}
+
+.animal-growth-catalog header small {
+  color: #758579;
+  font-size: 7px;
+}
+
+.animal-growth-stages {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.animal-growth-stages figure {
+  min-width: 0;
+  margin: 0;
+  text-align: center;
+}
+
+.animal-growth-stages img {
+  display: block;
+  width: 100%;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(50, 72, 41, 0.18));
+}
+
+.animal-growth-stages figcaption {
+  margin-top: 2px;
+  color: #5f7668;
+  font-size: 6px;
+}
+
+.barn-scene .animal {
+  width: var(--animal-width);
+  transform: translate(-50%, -50%);
+}
+
+.barn-scene .animal-art img {
+  aspect-ratio: 1;
+  object-fit: contain;
+  animation: animal-stage-pop 0.7s cubic-bezier(0.2, 1.4, 0.38, 1) both;
+}
+
+.animal-action-mark::before {
+  content: none !important;
+}
+
+.behavior-collectEggs .animal-art {
+  animation: animal-egg-ready 1.15s ease-in-out infinite;
+}
+
+.behavior-collectMilk .animal-art {
+  animation: animal-milk-settle 1.4s ease-in-out infinite;
+}
+
+.behavior-playDog .animal-art {
+  animation: dog-play-bounce 0.82s ease-in-out infinite;
+}
+
+.barn-scene .animal-card {
+  top: 83%;
+  min-width: 108px;
+  padding: 5px 6px;
+}
+
+.barn-scene .animal-card b {
+  font-size: 8px;
+}
+
+.barn-scene .animal-card span,
+.barn-scene .animal-card small {
+  display: block;
+  font-size: 6px;
+}
+
+.animal-age-meter {
+  height: 3px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: rgba(53, 83, 64, 0.16);
+}
+
+.animal-age-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8bc45b, #c5ed64);
+}
+
+.animal-card button {
+  width: 100%;
+  margin-top: 4px;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 5px;
+  background: #dff0d0;
+  color: #2b5a45;
+  font-size: 6px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.animal-card button:hover:not(:disabled) {
+  background: #c8e7ad;
+}
+
+.animal-card button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.barn-task-worker {
+  position: absolute;
+  left: var(--barn-worker-x);
+  top: var(--barn-worker-y);
+  width: var(--barn-worker-width);
+  pointer-events: none;
+  transform: translate(-50%, -92%);
+}
+
+.barn-task-worker-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  filter: drop-shadow(0 3px 2px rgba(43, 67, 41, 0.28));
+}
+
+.barn-task-worker-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  opacity: 0;
+  animation: field-worker-frame-cycle 1.16s step-end infinite;
+  animation-delay: calc(var(--frame-index) * 0.29s);
+}
+
+.barn-task-worker-status {
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  min-width: max-content;
+  padding: 4px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 8px;
+  background: rgba(255, 253, 246, 0.94);
+  color: #315344;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(47, 70, 36, 0.18);
+  transform: translateX(-50%);
+  backdrop-filter: blur(4px);
+}
+
+.barn-task-worker-status b,
+.barn-task-worker-status small {
+  display: block;
+  white-space: nowrap;
+}
+
+.barn-task-worker-status b {
+  font-size: 8px;
+}
+
+.barn-task-worker-status small {
+  margin-top: 2px;
+  color: #687b6e;
+  font-size: 6px;
+}
+
+@keyframes animal-stage-pop {
+  0% { opacity: 0; transform: translateY(8px) scale(0.82); }
+  70% { opacity: 1; transform: translateY(-2px) scale(1.04); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes animal-egg-ready {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  45% { transform: translateY(-3px) rotate(-2deg); }
+  65% { transform: translateY(1px) rotate(2deg); }
+}
+
+@keyframes dog-play-bounce {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  45% { transform: translate(5px, -6px) rotate(3deg); }
+  70% { transform: translate(-2px, 0) rotate(-2deg); }
+}
+
+@media (max-width: 760px) {
+  .animal-growth-catalog {
+    grid-template-columns: repeat(6, 145px);
+  }
+
+}
